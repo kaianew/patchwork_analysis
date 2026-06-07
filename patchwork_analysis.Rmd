@@ -39,33 +39,15 @@ library(ggplot2)
 library(dplyr)
 library(lme4)
 library(psych)
+library(multcomp)
+library(parameters)
+library(performance)
+library(car)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
 # Make full df, gaze-valid df, full df had patch, gaze-valid had patch 
 full_df = read.csv("timing_correctness_data.csv")
-
-# Potential values for correctness: Y, N, P, IDK
-just_idk = subset(full_df, think_correct == "IDK")
-patch_just_idk = subset(full_df, think_patch_correct == "IDK")
-correct_num_idk = nrow(just_idk)
-patch_correct_num_idk = nrow(patch_just_idk)
-
-# Make df with dropped rows if think_correct or think_patch_correct is IDK
-correct_no_idk = subset(full_df, think_correct != "IDK")
-patch_correct_no_idk = subset(full_df, think_patch_correct != "IDK")
-
-# Need to remove IDK and treat P/Y as true and N as false
-correct_no_idk$think_correct = ifelse(correct_no_idk$think_correct == "Y" | correct_no_idk$think_correct == "P", 1, 0)
-patch_correct_no_idk$think_patch_correct = ifelse(patch_correct_no_idk$think_patch_correct == "Y" | patch_correct_no_idk$think_patch_correct == "P", 1, 0)
-
-# Remove all "control" conditions and prepare patch_correct column for visualization
-had_patch = subset(patch_correct_no_idk, condition != "control")
-had_patch$patch_correct = ifelse(had_patch$condition == "correct", 1, 0)
-
-# Potential values for submitting: Y, N, NQ, P
-
-# TODO: submission question
 
 # Make boolean columns
 full_df$correct = ifelse(full_df$correct == "Y", TRUE, FALSE)
@@ -83,6 +65,22 @@ full_df$condition = as.factor(full_df$condition)
 # make numPrev column
 full_df$num_prev = full_df$task_no - 1
 full_df$num_prev = as.factor(full_df$num_prev)
+
+# For IDK in would_submit category, turn to NA
+full_df$would_submit[full_df$would_submit == 'IDK'] = NA
+# Also, blanks got read in as "" instead of NA
+full_df$would_submit[full_df$would_submit == ""] = NA
+full_df$think_patch_correct[full_df$think_patch_correct == ""] = NA
+# Combine Y/P for self-reported data since they have the same valence
+full_df$think_correct[full_df$think_correct == 'Y' | full_df$think_correct == 'P'] = 'YP'
+full_df$think_patch_correct[full_df$think_patch_correct == 'Y' | full_df$think_patch_correct == 'P'] = 'YP'
+full_df$would_submit[full_df$would_submit == 'Y' | full_df$would_submit == 'P'] = 'YP'
+
+# Make columns for correct patch/fix judgments 
+full_df$accurate_about_correctness = (full_df$correct == TRUE & full_df$think_correct == 'YP') | 
+                                      (full_df$correct == FALSE & full_df$think_correct == 'N')
+full_df$accurate_about_patch_correctness = (full_df$correct == TRUE & full_df$think_correct == 'YP') | 
+                                      (full_df$correct == FALSE & full_df$think_correct == 'N')
 ```
 
 # Prep data from survey to put in analysis dataframe
@@ -183,9 +181,10 @@ screener = screener[3:nrow(screener), ]
 
 # rename column to make easier to remember as predictor
 screener = rename(screener, professional_YOE = Q11)
+screener$professional_YOE = as.numeric(screener$professional_YOE)
 screener$PID = as.factor(screener$PID)
 
-# Singleton category is problematic, so we'll say unemployed participant is actively in their professional career
+# Singleton category is problematic, so we'll say unemployed participant is recently in their professional career
 screener$professional_identity = ifelse(
   screener$professional_identity == "Unemployed",
   "Professional",
@@ -208,37 +207,22 @@ paste0("Median age: ", median(screener$Age, na.rm=TRUE))
 paste0("Minimum age: ", min(screener$Age, na.rm=TRUE))
 paste0("Maximum age: ", max(screener$Age, na.rm=TRUE))
 
-# Q11 is YOE
-screener$Q11 = as.numeric(screener$Q11)
-paste0("Median YOE: ", median(screener$Q11, na.rm=TRUE))
-paste0("Minimum YOE: ", min(screener$Q11, na.rm=TRUE))
-paste0("Maximum YOE: ", max(screener$Q11, na.rm=TRUE))
+paste0("Median YOE: ", median(screener$professional_YOE, na.rm=TRUE))
+paste0("Minimum YOE: ", min(screener$professional_YOE, na.rm=TRUE))
+paste0("Maximum YOE: ", max(screener$professional_YOE, na.rm=TRUE))
 
 # Q13 is gender, Q16 is are you a student (answers: Yes, I am a Master's student, Yes, I am a Ph.D. student, No, Yes, I am undergraduate), Q10 is have you worked or are you currently working... with "Yes, I currently work at one" being the professional label
 as.data.frame(table(screener$Q13))
 ```
 
-# Subset dataframes for relevant analyses
-```{r}
-gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
-
-# boolean for whether they looked at the buggy method
-gaze_valid_df$looked_at_buggy_method = ifelse(is.na(gaze_valid_df$ttff_buggy_method), FALSE, TRUE)
-
-full_df_had_patch = full_df[full_df$had_patch, ]
-gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fixation_count), ]
-```
-
 # RQ1a: Just run the models from APR, What is it Good For? (ICSE 2024)
 ```{r}
-# Note: these are not our final models for this RQ, and were not derived in a principled way. We're just seeing how results generalize.
-str(full_df[, c("correct", "PID", "bug", "condition")])
-
+# Note: these are not our final models for this RQ, and were not derived in a principled way. We're just seeing how the models from the paper fare for us.
 correctness_model = glmer(correct ~ condition + (1 |PID) + (1 | bug), data = full_df, family = binomial)
 
 summary(correctness_model)
 
-full_df = lmer(time_minutes ~ condition + num_prev + (1 | PID) + (1 | bug), data = full_df)
+timing_model = lmer(time_minutes ~ condition + num_prev + (1 | PID) + (1 | bug), data = full_df)
 
 summary(timing_model)
 
@@ -300,9 +284,26 @@ full_df = merge(full_df,
                     by = "PID",
                     all.x = TRUE)
 ```
+# Subset dataframes for relevant analyses
+```{r}
+gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
+
+# boolean for whether they looked at the buggy method
+gaze_valid_df$looked_at_buggy_method = ifelse(is.na(gaze_valid_df$ttff_buggy_method), FALSE, TRUE)
+
+full_df_had_patch = full_df[full_df$had_patch, ]
+# relevel bc no control
+full_df_had_patch$condition = factor(full_df_had_patch$condition, 
+                                       levels = c("correct", "overfitting"))
+levels(full_df_had_patch$condition)
+
+gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fixation_count), ]
+```
 
 # RQ1a: How do patch suggestions affect time and accuracy of debugging sessions? (Section FIXME) 
 ```{r}
+# TODO: read in 2024 data and see if our participants are significantly more correct/faster (try and understand expertise to give evidence for why we might be seeing different results/no trend)
+
 # And now, as determined by the DAG, participant insights, and prior literature, we define the maximal model
 # FIXED EFFECTS:
 # key players: treatment condition, professional YOE. these are the ones we'll try nested models for in LRT.
@@ -394,6 +395,56 @@ Anova(timing_model)
 # TODO: Are professionals more likely to edit the patch they were given? Are students more likely to overfit? (passes tests x is incorrect for a new column of “overfitting_fix”)
 ```
 
+# RQ1b: How do developer self-reports measure up to behavioral outcomes?
+```{r}
+# Tables to make: think correct vs. actually correct, think patch correct vs. patch condition, would submit vs. actually correct
+correct_tab = table(full_df$correct, full_df$think_correct)
+patch_correct_tab = table(full_df_had_patch$condition, full_df_had_patch$think_patch_correct)
+submit_correct_tab = table(full_df$would_submit, full_df$correct)
+
+as.data.frame.matrix(correct_tab)
+as.data.frame.matrix(patch_correct_tab)
+as.data.frame.matrix(submit_correct_tab)
+
+test_patch = chisq.test(patch_correct_tab, simulate.p.value = TRUE, B = 10000)
+test_correct = chisq.test(correct_tab, simulate.p.value = TRUE, B = 10000)
+test_submit = chisq.test(submit_correct_tab, simulate.p.value = TRUE, B = 10000)
+
+test_patch
+test_correct
+test_submit
+
+# Standardized residuals (anything above 2 or below -2 is notable)
+test_patch$stdres
+test_correct$stdres
+test_submit$stdres
+
+# Notably, participants are good at detecting if patches are correct and if their own fixes are, too
+
+# We would like to see if professionals are better at determining the correctness of their fixes and the patch
+professional_correct_tab = table(full_df$professional_identity, full_df$accurate_about_correctness)
+professional_patch_correct_tab = table(full_df_had_patch$professional_identity, full_df_had_patch$accurate_about_patch_correctness)
+professional_correct_tab
+professional_patch_correct_tab
+
+test_prof_accuracy = chisq.test(professional_correct_tab)
+test_prof_patch_accuracy = chisq.test(professional_patch_correct_tab)
+
+test_prof_accuracy
+test_prof_patch_accuracy
+
+test_prof_accuracy$stdres
+test_prof_patch_accuracy$stdres
+
+# test also YOE
+wilcox.test(professional_YOE ~ accurate_about_patch_correctness, 
+            data = full_df_had_patch)
+wilcox.test(professional_YOE ~ accurate_about_correctness, 
+            data = full_df)
+
+# Verdict: we do not have significant evidence to suggest this is the case. May not be enough power.
+```
+
 # RQ4: How do patch suggestions influence cognitive load during debugging? (Section FIXME)
 ```{r}
 # High level plan: do subjective reports from NASA-TLX, and then see if eye tracking metrics agree with the self-reports
@@ -425,83 +476,8 @@ fix_duration_model = glmer(avg_fixation_duration ~ condition + (1|PID) + (1|bug)
                           family = Gamma(link="log"))
 summary(fix_duration_model)
 anova(fix_duration_model)
-```
 
-# Confusion matrix for patch judgments
-```{r}
-confusion_data <- had_patch %>%
-  group_by(think_patch_correct, patch_correct) %>%
-  summarise(n = n(), .groups = "drop") %>%
-  mutate(
-    pct = round(n / sum(n) * 100, 1),
-    think_label = ifelse(think_patch_correct == 1, "Think: Correct", "Think: Incorrect"),
-    actual_label = ifelse(patch_correct == 1, "Actually: Correct", "Actually: Incorrect")
-  )
-
-had_patch
-
-ggplot(confusion_data, aes(x = actual_label, y = think_label, fill = n)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = paste0(n, "\n(", pct, "%)")), size = 6) +
-  scale_fill_gradient(low = "white", high = "steelblue") +
-  labs(x = "Actual", y = "Think", fill = "Count", title = "Confusion Matrix for Patch Judgments") +
-  theme_minimal() +
-  theme(
-    axis.text = element_text(size = 13),
-    axis.title = element_text(size = 14)
-  )
-
-# Chi^2 test between think patch correct and actually correct
-patch_table = table(had_patch$condition, had_patch$think_patch_correct)
-patch_table = patch_table[rownames(patch_table) != "control",]
-
-chisq.test(patch_table)
-
-# People are statistically significantly inclined to agree with reality
-
-# TODO: test to see if IDK response
-
-ggsave("patch_confusion_matrix.png", width = 6, height = 5, dpi = 300)
-```
-
-# Confusion matrix for correctness 
-```{r}
-confusion_data2 <- correct_no_idk %>%
-  group_by(think_correct, correct) %>%
-  summarise(n = n(), .groups = "drop") %>%
-  mutate(
-    pct = round(n / sum(n) * 100, 1),
-    think_label = ifelse(think_correct == 1, "Think: Correct", "Think: Incorrect"),
-    actual_label = ifelse(correct == 1, "Actually: Correct", "Actually: Incorrect")
-  )
-
-ggplot(confusion_data2, aes(x = actual_label, y = think_label, fill = n)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = paste0(n, "\n(", pct, "%)")), size = 6) +
-  scale_fill_gradient(low = "white", high = "steelblue") +
-  labs(x = "Actual", y = "Think", fill = "Count", title = "Confusion Matrix for Solution Judgments") +
-  theme_minimal() +
-  theme(
-    axis.text = element_text(size = 13),
-    axis.title = element_text(size = 14)
-  )
-
-# Chi^2 test between actual correctness and think their solution is correct
-correct_table = table(correct_no_idk$correct, correct_no_idk$think_correct)
-
-res = chisq.test(correct_table)
-res
-res$stdres
-
-# Indeed, people are statistically significantly inclined to agree with reality
-
-# Total for accuracy of correctness judgments
-judgment_accuracy = 38.7 + 40.5
-paste0("Total accuracy of correctness judgments: ", judgment_accuracy, "%")
-
-ggsave("confusion_matrix.png", width = 6, height = 5, dpi = 300)
-
-# FIXME: do analyses of whether or not professionals are more likely to say 'IDK'
+# TODO: do friedman test between average fixation duration before and after the patch
 ```
 
 # Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? (Section FIXME)
