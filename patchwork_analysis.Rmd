@@ -638,5 +638,10 @@ gaze_valid_long <- gaze_valid_df %>%
   )
 
 gaze_valid_long
+
+# random effects might need to go
+m <- art(prop_fixation ~ condition * AOI + (1|PID),
+         data = gaze_valid_long)
+anova(m)
 ```
 
