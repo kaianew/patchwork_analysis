@@ -1,0 +1,128 @@
+PID,task_no,bug,condition,time_minutes,correct,passes_original_tests,fix_site_same,think_correct,evaluated_patch,think_patch_correct,would_submit,Kaia's notes
+P1,1,math33,control,25.1567,N,N,,N,,,N,
+P1,2,math50,correct,18.0467,N,N,N,Y,Y,N,Y,
+P1,3,math63,overfitting,1.6683,N,Y,N,Y,Y,N,Y,
+P2,1,math50,control,25.4133,N,N,,N,,,N,
+P2,2,chart12,overfitting,25.38,N,N,Y,N,Y,N,N,
+P2,3,lang10,correct,20.165,N,N,N,N,Y,IDK,N,
+P3,1,chart12,overfitting,23.86,Y,Y,N,Y,Y,N,N,
+P3,2,math50,control,25.1883,N,N,,N,,,N,
+P3,3,math63,correct,18.9917,Y,Y,N,Y,Y,Y,N,
+P4,1,math63,overfitting,15.5267,Y,Y,N,P,Y,N,Y,
+P4,2,chart12,correct,13.1083,Y,Y,N,Y,Y,IDK,Y,
+P4,3,lang10,control,25.22,N,N,,N,,,N,
+P5,1,math63,control,19.5267,N,Y,,Y,,,Y,did not see patch
+P5,2,lang10,overfitting,15.6167,N,N,N,IDK,Y,Y,Y,
+P5,3,math33,correct,11.9917,Y,Y,Y,Y,Y,Y,Y,
+P6,1,chart12,correct,14.89,Y,Y,N,IDK,Y,Y,Y,
+P6,2,lang10,control,25.1817,N,N,,N,,,N,
+P6,3,math63,overfitting,9.4267,Y,Y,N,Y,Y,N,Y,
+P7,1,math50,control,25.2383,N,N,,N,,,N,
+P7,2,math33,correct,25.2883,N,N,N,N,Y,N,N,
+P7,3,chart12,overfitting,4.4567,Y,Y,N,Y,Y,N,Y,
+P8,1,lang10,correct,25.245,Y,Y,Y,IDK,Y,N,N,
+P8,2,math50,overfitting,25.2883,N,N,N,Y,Y,N,Y,"changed test and somehow thinks that fixed it? look at their interview. also really have to say something in the paper about people forgetting to run all the tests lol. can i quantify this? see if last test run is all tests or just one, or who changed tests and then assumed it was correct when it doesn't pass tests"
+P8,3,math63,control,25.2717,Y,Y,,Y,,,NQ,
+P9,1,math33,control,25.2517,N,N,,N,,,N,
+P9,2,math50,overfitting,20.7283,N,N,N,P,Y,N,Y,
+P9,3,chart12,correct,5.6967,Y,Y,Y,Y,Y,Y,Y,
+P10,1,math50,overfitting,25.145,N,N,N,N,Y,IDK,N,
+P10,2,lang10,control,25.18,N,N,,N,,,N,
+P10,3,chart12,correct,3.26,Y,Y,Y,Y,Y,Y,Y,
+P11,1,chart12,overfitting,5.7917,Y,Y,N,Y,N,,P,
+P11,2,math33,correct,22.1883,Y,Y,Y,Y,Y,Y,Y,
+P11,3,math50,control,25.25,N,N,,N,,,N,
+P12,1,math63,correct,21.725,N,Y,N,IDK,Y,P,Y,
+P12,2,chart12,control,12.5367,Y,Y,,Y,,,Y,
+P12,3,lang10,overfitting,25.2533,N,Y,Y,N,Y,N,Y,
+P13,1,chart12,control,19.87,Y,Y,,Y,,,Y,this is the one that i needed to truncate because they didn't know what to do when they were done/didn't call me over
+P13,2,math50,correct,10.2417,Y,Y,Y,IDK,Y,N,NQ,
+P13,3,lang10,overfitting,25.245,N,Y,Y,Y,Y,Y,NQ,
+P14,1,chart12,correct,3.6483,Y,Y,Y,Y,Y,Y,NQ,
+P14,2,math63,overfitting,9.8767,N,Y,N,Y,Y,N,NQ,
+P14,3,math33,control,25.2767,N,N,,N,,,N,
+P15,1,chart12,overfitting,25.29,N,N,N,N,Y,N,N,
+P15,2,math50,control,25.2,N,N,,IDK,,,P,
+P15,3,math33,correct,25.3183,N,N,N,N,Y,N,N,
+P16,1,math63,overfitting,5.28,Y,Y,N,Y,Y,N,NQ,
+P16,2,chart12,correct,11.6083,Y,Y,Y,Y,Y,Y,N,
+P16,3,math50,control,25.2017,N,N,,N,,,N,
+P17,1,math33,correct,25.2433,Y,Y,Y,IDK,Y,IDK,Y,
+P17,2,lang10,overfitting,25.2167,N,N,N,N,Y,N,N,
+P17,3,math63,control,5.2967,N,Y,,Y,,,Y,
+P18,1,math33,correct,14.9817,Y,Y,Y,Y,Y,Y,Y,
+P18,2,chart12,control,22.8967,Y,Y,,Y,,,Y,
+P18,3,lang10,overfitting,7.1683,N,Y,Y,Y,Y,Y,Y,
+P19,1,math63,control,25.24,N,N,,N,,,N,
+P19,2,math50,correct,8.795,Y,Y,Y,Y,Y,Y,Y,
+P19,3,math33,overfitting,25.1717,N,Y,Y,Y,Y,Y,Y,
+P20,1,math33,control,25.1833,N,N,,N,,,N,
+P20,2,chart12,overfitting,25.2317,N,N,N,N,Y,N,N,
+P20,3,math63,correct,21.7317,N,Y,N,Y,Y,N,Y,"Since they said they wouldn't have used it, I feel like it's a No"
+P21,1,chart12,overfitting,17.2,Y,Y,N,P,Y,N,Y,Kaia: I think they settled on probably
+P21,2,math50,control,25.2683,N,N,,N,,,N,
+P21,3,lang10,correct,8.395,Y,Y,Y,Y,Y,Y,Y,
+P22,1,math50,overfitting,19.9167,N,Y,Y,Y,Y,Y,N,
+P22,2,math63,correct,5.1467,Y,Y,Y,Y,Y,Y,Y,
+P22,3,chart12,control,25.1783,N,N,,N,,,N,
+P23,1,math50,correct,15.2367,Y,Y,Y,Y,Y,Y,NQ,
+P23,2,lang10,overfitting,23.2283,N,Y,Y,Y,Y,Y,NQ,"nuance was they pointed out another issue not related to the same bug about the test suite for correctness. What to do about when they describe steps they would take before submitting the code? There are different steps that are not related to the fix itself, like comments or docs, that I don't think should count them out of submitting the code. But if they need to understand it better before submitting, I think that they mean they would not submit the fix they made. Edits for maintenance vs. edits or further deliberation for functionality?"
+P23,3,chart12,control,25.265,N,N,,N,,,N,
+P24,1,lang10,correct,25.19,Y,Y,Y,N,Y,N,N,
+P24,2,chart12,control,7.3267,Y,Y,,P,,,Y,Is this maybe or probably? 
+P24,3,math33,overfitting,25.165,Y,Y,N,IDK,Y,Y,N,this person is just really inconsistent but indeed these are the answers they gave
+P25,1,lang10,control,25.155,N,N,,N,,,N,
+P25,2,math50,control,25.1967,N,N,,N,,,N,check what the patch is because it doesn't build I think
+P25,3,math33,overfitting,6.505,N,Y,Y,Y,Y,P,N,
+P26,1,math63,control,25.21,N,N,,N,,,N,"Did not ask them if they would submit. HOWEVER, they did not make any edits whatsover, so IRL they could not submit anything. That was my ruling."
+P26,2,math33,overfitting,25.2483,N,Y,Y,IDK,Y,IDK,Y,
+P26,3,chart12,correct,25.1233,Y,Y,Y,N,Y,N,,Do not have info on whether or not they would submit.
+P27,1,chart12,overfitting,25.2633,N,N,Y,N,Y,N,NQ,"Kaia thinks NQ (not quite yet). Build failed I think, so check"
+P27,2,math33,control,25.2583,N,N,,N,,,N,
+P27,3,lang10,correct,25.3,Y,Y,Y,IDK,Y,IDK,N,
+P28,1,lang10,overfitting,11.0333,N,Y,Y,IDK,Y,IDK,N,
+P28,2,chart12,correct,9.02,Y,Y,Y,Y,Y,Y,Y,
+P28,3,math63,control,25.1933,N,N,,N,,,N,
+P29,1,math50,correct,25.21,Y,Y,Y,IDK,Y,IDK,N,
+P29,2,math33,overfitting,25.1667,N,N,N,N,Y,N,N,
+P29,3,math63,control,20.6667,N,Y,,P,,,IDK,
+P30,1,chart12,correct,4.8583,Y,Y,Y,Y,Y,Y,Y,"I've been ruling this as Y, we could extend the definition to be push OR review. "
+P30,2,lang10,control,25.195,N,N,,N,,,Y,unsure about whether getting someone else to take a look at it should count as review? There were some that were borderline. See code: submission: before submission: talk to someone
+P30,3,math50,overfitting,6.5217,N,Y,Y,Y,Y,Y,NQ,??? which one bro. we gotta go maybe I think
+P31,1,chart12,control,5.9083,Y,Y,,Y,,,Y,Elements of both not quite and probably
+P31,2,math33,correct,18.9733,Y,Y,Y,Y,Y,Y,Y,
+P31,3,math50,overfitting,25.2283,N,N,N,Y,Y,N,NQ,
+P32,1,math50,control,25.2233,Y,Y,,P,,,N,"Could be maybe, but their reasoning is correct and their tone/rest of the interview seemed like probably"
+P32,2,lang10,overfitting,25.2617,N,N,N,N,Y,N,N,
+P32,3,math63,correct,7.5233,Y,Y,N,Y,Y,N,Y,
+P33,1,chart12,overfitting,8.875,N,Y,Y,IDK,Y,IDK,Y,
+P33,2,lang10,control,25.1933,N,N,,N,,,N,
+P33,3,math63,correct,19.6783,Y,Y,Y,Y,Y,Y,Y,
+P34,1,math63,overfitting,18.615,Y,Y,N,Y,Y,N,NQ,
+P34,2,chart12,correct,9.23,Y,Y,Y,P,Y,Y,N,hrm
+P34,3,math33,control,25.1967,N,N,,N,,,N,
+P35,1,lang10,correct,21.0133,Y,Y,Y,P,Y,P,Y,
+P35,2,math33,overfitting,17.3033,N,Y,Y,Y,Y,Y,Y,
+P35,3,math50,control,25.22,N,N,,Y,,,Y,
+P36,1,math63,correct,22.985,N,Y,,IDK,N,,N,Did not look at patch. TODO: Might consider this to be null the way it is in the control rows.
+P36,2,chart12,control,5.4517,Y,Y,,Y,,,Y,
+P36,3,math33,overfitting,25.185,N,N,,N,N,,N,"^^ as above, did not look at patch"
+P37,1,chart12,control,19.865,Y,Y,,Y,,,Y,
+P37,2,lang10,correct,25.1983,N,N,N,N,Y,IDK,N,
+P37,3,math50,overfitting,25.1867,N,Y,Y,IDK,Y,IDK,P,"Depends on how we treat ""talking to another person"""
+P1_0,1,math33,control,25.4117,N,N,,Y,,,N,
+P1_0,2,math50,correct,21.31,Y,Y,Y,Y,Y,Y,Y,
+P1_0,3,math63,overfitting,4.7483,Y,Y,N,Y,Y,N,Y,
+P2_0,2,chart12,overfitting,11.1433,Y,Y,N,Y,Y,N,NQ,
+P2_0,3,lang10,correct,21.3467,Y,Y,Y,Y,Y,Y,Y,
+P3_0,1,chart12,overfitting,3.6167,Y,Y,,P,N,,Y,didn't look at patch
+P3_0,2,math50,control,25.2517,N,N,,N,,,N,
+P3_0,3,math63,correct,8.5533,Y,Y,N,Y,Y,P,Y,fixes the bug but not high quality
+P4_0,1,math63,overfitting,25.4417,N,Y,Y,IDK,Y,IDK,Y,
+P4_0,3,lang10,control,25.305,N,N,,N,,,N,
+P5_0,1,math63,correct,11.665,Y,Y,Y,Y,Y,Y,N,
+P5_0,2,lang10,overfitting,16.7867,N,Y,Y,P,Y,Y,Y,
+P5_0,3,math33,control,25.3367,N,N,,N,,,N,
+P6_0,1,chart12,correct,6.43,Y,Y,Y,Y,Y,Y,Y,
+P6_0,2,lang10,control,25.7500,N,N,,N,,,N,
+P6_0,3,math63,overfitting,4.8467,N,Y,N,N,Y,N,N,

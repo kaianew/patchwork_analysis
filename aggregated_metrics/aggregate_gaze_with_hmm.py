@@ -11,6 +11,8 @@ ANALYSIS_CSV = '/home/kaia/patchwork_aggregation/timing_correctness_data.csv'
 
 # Init data structures
 analysis_df = pd.read_csv(ANALYSIS_CSV)
+if 'fixation_rate' in analysis_df.columns:
+    analysis_df = analysis_df.drop(columns=['fixation_rate'])
 
 # don't forget to append file name for this
 paths = get_subdirectories()
@@ -118,7 +120,6 @@ Calculate (and put into analysis_df):
 * shannon entropy of fixation durations across non-test files
 * time to first fixation on buggy method
 * average fixation duration across whole session
-* fixation rate across whole session
 * time to first fixation on patch (if applicable)
 * average fixation duration on patch (if applicable)
 * attention switching frequency (aoi switches / time, modulo '-' or 'OOB')
@@ -174,8 +175,6 @@ def calculate_non_art_metrics(df, analysis_df, mask, has_patch, total_switches):
     analysis_df.loc[mask, 'avg_fixation_duration'] = avg_fixation_duration
 
     task_time = df['timestamp'].max() - df['timestamp'].min()
-    fixation_rate = len(fixation_durations) / task_time
-    analysis_df.loc[mask, 'fixation_rate'] = fixation_rate
 
     ttff_patch = None
     avg_fixation_duration_patch = None

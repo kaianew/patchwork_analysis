@@ -43,6 +43,8 @@ library(multcomp)
 library(parameters)
 library(performance)
 library(car)
+library("ARTool")
+library(tidyverse)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
@@ -284,12 +286,15 @@ full_df = merge(full_df,
                     by = "PID",
                     all.x = TRUE)
 ```
+
 # Subset dataframes for relevant analyses
 ```{r}
+# FIXME: not necessarily required to look at source code, should find a better thing to subset on
 gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
 
 # boolean for whether they looked at the buggy method
 gaze_valid_df$looked_at_buggy_method = ifelse(is.na(gaze_valid_df$ttff_buggy_method), FALSE, TRUE)
+# FIXME: do we want to drop people who didn't look at the patch from this dataframe?
 
 full_df_had_patch = full_df[full_df$had_patch, ]
 # relevel bc no control
@@ -442,7 +447,7 @@ wilcox.test(professional_YOE ~ accurate_about_patch_correctness,
 wilcox.test(professional_YOE ~ accurate_about_correctness, 
             data = full_df)
 
-# Verdict: we do not have significant evidence to suggest this is the case. May not be enough power.
+# Verdict: we do not have significant evidence to suggest this is the case.
 ```
 
 # RQ4: How do patch suggestions influence cognitive load during debugging? (Section FIXME)
@@ -469,245 +474,169 @@ r2(cognitive_load_model)
 Anova(cognitive_load_model)
 
 # Gaze metrics related to cognitive load: average fixation duration
-# related metric:
-# avg_fixation_duration
-fix_duration_model = glmer(avg_fixation_duration ~ condition + (1|PID) + (1|bug), 
-                          data = gaze_valid_df,
-                          family = Gamma(link="log"))
+hist(gaze_valid_df$avg_fixation_duration)
+# looks mostly normal to me, can use regular lmer
+fix_duration_model = lmer(avg_fixation_duration ~ condition + (1|PID) + (1|bug), 
+                          data = gaze_valid_df)
 summary(fix_duration_model)
-anova(fix_duration_model)
 
-# TODO: do friedman test between average fixation duration before and after the patch
+# Additionally, AFD is likely affected by when they looked at the patch first/how long they spent debugging unassisted
+# So we can do an analysis separately
+fix_duration_patch_model = lmer(avg_fixation_duration ~ condition + ttff_patch + (1|PID) + (1|bug), 
+                          data = gaze_valid_had_patch)
+summary(fix_duration_patch_model)
 ```
 
 # Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? (Section FIXME)
 # Hypotheses derived from interview data
 ```{r}
-# TODO: figure out survivor analysis with anything where the outcome variable is time
-
-# FIXME: broken, skewness won't work and might be masked by a different package (parameters)
-# helper function to check if model residuals are normally distributed
-check_residuals <- function(model) {
-  model_name <- deparse(substitute(model))
-  resids     <- residuals(model)
-  skew       <- skewness(resids)
-  
-  par(mfrow = c(1, 2))
-  hist(resids, main = paste("Residuals:", model_name), xlab = "Residuals")
-  qqnorm(resids, main = model_name)
-  qqline(resids, col = "red")
-  par(mfrow = c(1, 1))
-  
-  cat(model_name, "- residual skewness:", round(skew, 3), "\n")
-  if (abs(skew) > 0.5) {
-    cat("  ^ consider a different model family or transform response var\n")
-  }
-}
+# TODO: figure out survival analysis with anything where the outcome variable is time
 
 # Hypothesis: people who look at the patch early on may be anchored to the patch's solution and may finish the task faster/more correctly
 # expect condition:TTFF interaction ~ correctness and TTFF ~ time in glmer model
-# TODO: make sure it's dropping all the relevant columns
-
-# ttff_patch, avg_fixation_duration_patch (~ correctness)
-ttff_patch_model = glmer(correct ~ ttff_patch + (1|PID) + (1|bug), 
-                 data = timing_data, family = binomial)
+# random effect structure is non-estimable
+# thus we do regular glm
+# todo: ADD  back in bug
+ttff_patch_model = glm(correct ~ ttff_patch + condition + bug, 
+                 data = gaze_valid_had_patch, family = binomial)
 summary(ttff_patch_model)
 
-ttff_patch_model_time = lmer(time_minutes ~ ttff_patch + (1|PID) + (1|bug), 
-                 data = timing_data)
+ttff_patch_model_time = lmer(time_minutes ~ ttff_patch + condition + (1|PID) + (1|bug), 
+                 data = gaze_valid_had_patch)
 summary(ttff_patch_model_time)
 anova(ttff_patch_model_time)
+table(gaze_valid_had_patch$correct)
 
-# Hypothesis: Some developers described spending a while evaluating the patch and developing suspicion about it. Developers who look at the patch for longer or more carefully may be more likely to debug correctly or quickly. 
-# fixation %/count and average fixation duration ~ correctness
-# TODO: putting condition just for correctness since it appears to differ between overfitting/correct?
-avg_dur_patch_model = glmer(correct ~ avg_fixation_duration_patch + condition + (1|PID) + (1|bug), 
-                 data = timing_data, family = binomial)
-summary(avg_dur_patch_model)
-
-avg_dur_patch_model_time = lmer(time_minutes ~ avg_fixation_duration_patch + (1|PID) + (1|bug), 
-                 data = timing_data)
-summary(avg_dur_patch_model_time)
-anova(avg_dur_patch_model_time)
-
-# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with accurate proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more likely to debug correctly.
+# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more likely to debug correctly.
 # look at number of cross-AOI switches / time ~ correctness
-attention_switch_model = glmer(correct ~ attention_switching_rate + (1|PID) + (1|bug), 
-                 data = timing_data, family = binomial)
+attention_switch_model = glmer(correct ~ attention_switching_rate + condition + (1|PID) + (1|bug),
+                 data = gaze_valid_df, family = binomial)
 summary(attention_switch_model)
 
-attention_switch_model_time = lmer(time_minutes ~ attention_switching_rate + (1|PID) + (1|bug), 
-                 data = timing_data)
+attention_switch_model_time = lmer(time_minutes ~ attention_switching_rate + condition + (1|PID) + (1|bug),
+                 data = gaze_valid_df)
 
-# Hypothesis: Overwhelmingly, developers report having access to a patch speeding up fault localization. When developers have access to a patch, do they find the location of the bug faster and search more efficiently? 
+# -------- #
+# We are interested in seeing if focusing on any particular AOI predicts debugging correctness or speed beyond the treatment condition. We investigate with a series of  regressions and then compare for multcomp between outcome vars/same data
+relevant_aoi_duration_cols = c("Test.and.Run.Output_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration")
+# Patch_fixation_duration
+
+# fill 0s for NAs in relevant AOI duration columns - they spent no time looking at these
+gaze_valid_df[relevant_aoi_duration_cols][is.na(gaze_valid_df[relevant_aoi_duration_cols])] = 0
+gaze_valid_had_patch[relevant_patch_aoi_duration_cols][is.na(gaze_valid_had_patch[relevant_patch_aoi_duration_cols])] = 0
+
+relevant_aoi_prop_cols = paste0("prop_", relevant_aoi_duration_cols)
+relevant_patch_aoi_prop_cols = paste0("prop_", relevant_patch_aoi_duration_cols)
+
+# Create columns for the total fixation duration, then columns for duration proportion per AOI
+gaze_valid_df$total_fixation_duration = rowSums(gaze_valid_df[, relevant_aoi_duration_cols])
+gaze_valid_had_patch$total_fixation_duration = rowSums(gaze_valid_had_patch[, relevant_patch_aoi_duration_cols])
+gaze_valid_df[, relevant_aoi_prop_cols] = gaze_valid_df[, relevant_aoi_duration_cols] / gaze_valid_df$total_fixation_duration
+gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, relevant_patch_aoi_duration_cols] / gaze_valid_had_patch$total_fixation_duration
+
+# # Correctness: non-patch AOIs
+# # list of models we're training and p-values for multcomp
+# p_values = c()
+# for (col in relevant_aoi_prop_cols) {
+#   formula = as.formula(paste("correct ~", col, "+ condition + (1|PID) + (1|bug)"))
+#   correct_model = glmer(formula, data = gaze_valid_df, family = binomial)
+#   summary(correct_model)
+# 
+#   # save p-value for multcomp :3c
+#   coef_table = summary(model)$coefficients
+#   as.data.frame(coef_table)
+#   # p_values[col] = coef_table[col, "Pr(>|z|)"]
+# 
+# }
+# 
+# p_adjusted = p.adjust(p_values, method = "BH")
+# 
+# data.frame(
+#   aoi = relevant_aoi_prop_cols,
+#   p_raw = p_values,
+#   p_adjusted = p_adjusted
+# )
+# 
+# # Correctness: patch AOI
+# correct_patch_model = glmer(correct ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch, family = binomial)
+# summary(correct_patch_model)
+# 
+# # Timing: non-patch AOIs
+# # FIXME: again, survival analysis?
+# p_values_time = c()
+# for (col in relevant_aoi_prop_cols) {
+#   formula = as.formula(paste("time_minutes ~", col, "+ condition + (1|PID) + (1|bug)"))
+#   time_model = lmer(formula, data = gaze_valid_df)
+#   summary(time_model)
+# 
+#   # save p-value for multcomp :3c
+#   coef_table = summary(model)$coefficients
+#   p_values_time[col] = coef_table[col, "Pr(>|z|)"]
+# }
+# 
+# p_adjusted_time = p.adjust(p_values_time, method = "BH")
+# 
+# data.frame(
+#   aoi = relevant_aoi_prop_cols,
+#   p_raw = p_values_time,
+#   p_adjusted = p_adjusted_time
+# )
+# 
+# # Timing: patch AOI
+# time_patch_model = lmer(time_minutes ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch)
+# summary(time_patch_model)
+```
+
+# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME)
+```{r}
+# Hypothesis: Overwhelmingly, developers report having access to a patch speeding up fault localization or making it possible for them. When developers have access to a patch, do they find the location of the bug faster, or find it at all? 
 # TTFF on buggy method ~ has_patch
-# fixation rate ~ has_patch 
 # check for subset of trials on Chart 12 -- this one had an overfitting patch that was not in the correct method
 # First do logistic regression: did having a patch help people look at the buggy method more at all? 
-# Then, try a survival analysis -- we have good reason to try this since we're trying to predict the time until an event occurs, with right-censored data
-fl_model = glmer(looked_at_buggy_method ~ had_patch + (1|PID) + (1|bug), 
-                 data = timing_data, family = binomial)
+# Then, see if it made them look at it faster
+fl_model = glmer(looked_at_buggy_method ~ condition + (1|PID) + (1|bug), 
+                 data = gaze_valid_df, family = binomial)
 summary(fl_model)
 
-# unfortunately, don't have enough data to just try this for chart12 since it embedded incorrect FL info
+fl_time_model = lmer(ttff_buggy_method ~ condition + (1|PID) + (1|bug),
+                     data = gaze_valid_df)
+summary(fl_time_model) # FIXME: look at residuals and try survival analysis if no good
+
+# TODO: try simple test that is meant for small sample size to see if it also helped people find the bug with chart12 (which had wrong FL)
 
 # Hypothesis: Along similar lines, developers also report having access to a patch narrowing their focus. When developers have access to a patch, do they look at a more narrow slice of a codebase or have a "pointier" distribution of attention?
 # num_files_looked_at (should account for time confound), fixation_duration_entropy
 # an offset just makes the coefficient 1, so creates assumption where there is a 1:1 relationship between the amount of time spent on task and the number of files you look at
-num_files_m <- glmer(num_files_looked_at ~ had_patch + offset(log(time_minutes)) + (1|PID) + (1|bug), 
-           data = timing_data, family = poisson)
+num_files_m <- glmer(num_files_looked_at ~ condition + offset(log(time_minutes)) + (1|PID) + (1|bug), 
+           data = gaze_valid_df, family = poisson)
 summary(num_files_m)
 
-entropy_m = lmer(fixation_duration_entropy ~ had_patch + (1|PID) + (1|bug), 
-                 data = timing_data)
-summary(entropy_m)
+entropy_m = lmer(fixation_duration_entropy ~ condition + (1|PID) + (1|bug), 
+                 data = gaze_valid_df)
+# ------ #
+# We would like to see if distribution of attention changed over AOIs we care about with the addition of a patch
+gaze_valid_df
 
-# TODO check all the residuals like so:
-# check_residuals(entropy_m)
-```
-
-
-# ART ANOVA for:
-# RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? (Section FIXME)
-# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME)
-```{r}
-library("ARTool")
-og_timing_data = timing_data
-# TODO: determine whether '-' and 'Unknown/OOB' AOIs are MNAR by drawing pic. comment on this in paper
-
-# Then, remove the "Patch" AOI for gaze distributions between correct vs. incorrect trials
-# This is appropriate given our RQ targets how debugging behaviors /change/ in response to a patch, so we expect there to be some difference on the distribution
-# over other AOIs
-
-# TODO: also look at differences between when people got the problem correct/wrong just for when they had a patch 
-
-# Find count and duration columns
-fixation_count_cols    <- grep("fixation_count", names(timing_data), value = TRUE)
-fixation_duration_cols <- grep("fixation_duration", names(timing_data), value = TRUE)
-
-# Exclude other duration metrics from columns
-# And also exclude patch fixations from the columns, since we're only interested in seeing how this affected other stages of debugging
-fixation_duration_cols = fixation_duration_cols[fixation_duration_cols != "avg_fixation_duration"
-                                                 & fixation_duration_cols != "avg_fixation_duration_patch"
-                                                 & fixation_duration_cols != "fixation_duration_entropy"
-                                                 & fixation_duration_cols != "Patch_fixation_duration"
-                                                 & fixation_duration_cols != "OOB_fixation_duration"
-                                                 & fixation_duration_cols != "X._fixation_duration"]
-
-# Exclude missing data for AOIs or fixations outside of AOIs we consider
-fixation_count_cols = fixation_count_cols[fixation_count_cols != "Patch_fixation_count"
-                                          & fixation_count_cols != "X._fixation_count"
-                                          & fixation_count_cols != "OOB_fixation_count"]
-
-# fill 0s for NAs left in the fixation_counts/durations columns per row because ART can't work on NAs
-timing_data[fixation_count_cols][is.na(timing_data[fixation_count_cols])] = 0
-timing_data[fixation_duration_cols][is.na(timing_data[fixation_duration_cols])] = 0
-
-# Create columns for the total counts and durations, then columns for the proportions of counts and durations per AOI
-timing_data$total_fixation_count    <- rowSums(timing_data[, fixation_count_cols], na.rm = TRUE)
-timing_data$total_fixation_duration <- rowSums(timing_data[, fixation_duration_cols], na.rm = TRUE)
-timing_data[, paste0("prop_", fixation_count_cols)]    <- timing_data[, fixation_count_cols] / timing_data$total_fixation_count
-timing_data[, paste0("prop_", fixation_duration_cols)] <- timing_data[, fixation_duration_cols] / timing_data$total_fixation_duration
-
-# Subset to only participant-tasks where we had valid gaze data
-timing_data <- timing_data[timing_data$total_fixation_count > 0, ]
-print(nrow(timing_data))
-table(timing_data$correct)
-table(timing_data$had_patch)
-
-run_art_analysis <- function(timing_data, prop_cols, group_var, metric) {
-
-  # makes 'AOI' a column so there's a row for each one per participant-task
-  timing_data_long <- reshape(
-    timing_data[, c("PID", "bug", group_var, prop_cols)],
-    varying   = prop_cols,
-    v.names   = "proportion",
-    timevar   = "AOI",
-    times     = prop_cols,
-    direction = "long"
+gaze_valid_long <- gaze_valid_df %>%
+  dplyr::select(PID, bug, condition, had_patch, all_of(relevant_aoi_prop_cols)) %>%
+  pivot_longer(
+    cols = all_of(relevant_aoi_prop_cols),
+    names_to  = "AOI",
+    values_to = "prop_fixation"
+  ) %>%
+  mutate(
+    # Strip leading "prop_" and trailing "_fixation_duration"
+    AOI = str_remove(AOI, "^prop_"),
+    AOI = str_remove(AOI, "_fixation_duration$"),
+    # Clean up dots in names like "Test.and.Run.Output" → "Test and Run Output"
+    AOI = str_replace_all(AOI, "\\.", " "),
+    # Convert to factors
+    PID       = factor(PID),
+    bug       = factor(bug),
+    condition = factor(condition),
+    AOI       = factor(AOI)
   )
-  
-  rownames(timing_data_long) <- NULL
-  
-  # remove leading crap from AOI names
-  timing_data_long$AOI <- gsub("prop_|_fixation_count|_fixation_duration", "", timing_data_long$AOI)
 
-  timing_data_long$AOI            <- factor(timing_data_long$AOI)
-  timing_data_long[[group_var]]   <- factor(timing_data_long[[group_var]])
-  timing_data_long$PID <- factor(timing_data_long$PID)
-  
-# Visualization code 
-# Compute mean proportion per AOI per group
-means <- aggregate(proportion ~ AOI + get(group_var), data = timing_data_long, FUN = mean)
-names(means)[2] <- group_var
-
-# Reshape to wide for barplot
-means_wide <- reshape(means,
-  idvar     = "AOI",
-  timevar   = group_var,
-  v.names   = "proportion",
-  direction = "wide"
-)
-rownames(means_wide) <- means_wide$AOI
-means_wide$AOI <- NULL
-# \\. is an escape sequence for . so it means a literal dot instead of a regex
-colnames(means_wide) <- gsub("proportion\\.", "", colnames(means_wide))
-
-# Plot
-colors <- rainbow(nrow(means_wide))
-barplot(as.matrix(means_wide),
-  col     = colors,
-  legend  = rownames(means_wide),
-  beside  = FALSE,
-  main    = paste0("Proportion of fixation ", metric, "s by AOI and ", group_var),
-  xlab    = group_var,
-  ylab    = "Mean proportion",
-  args.legend = list(x = "topright")
-)
-  # Run the analysis
-  formula <- as.formula(paste("proportion ~", group_var, "* AOI + (1|PID) + (1|bug)"))
-  m <- art(formula, data = timing_data_long)
-  return(list(model = m, anova = anova(m), data = timing_data_long))
-}
-
-# Seeing the difference in proportions between fixation counts and durations over AOIs given patch vs. no patch, correct vs. incorrect
-count_prop_cols    <- paste0("prop_", fixation_count_cols)
-duration_prop_cols <- paste0("prop_", fixation_duration_cols)
-
-res1 <- run_art_analysis(timing_data, count_prop_cols,    "correct", "count")
-res2 <- run_art_analysis(timing_data, count_prop_cols,    "had_patch", "count")
-res3 <- run_art_analysis(timing_data, duration_prop_cols, "correct", "duration")
-res4 <- run_art_analysis(timing_data, duration_prop_cols, "had_patch", "duration")
-
-
-# Correct for multiple comparisons across interaction p-values
-extract_pvalues <- function(res, analysis_name) {
-  if (is.null(res$anova)) return(NULL)
-  
-  pvals <- res$anova$`Pr(>F)`
-  effects <- rownames(res$anova)
-  
-  data.frame(
-    analysis = analysis_name,
-    effect   = effects,
-    p_value  = pvals
-  )
-}
-
-# Collect all p-values
-pval_df <- rbind(
-  extract_pvalues(res1, "count ~ correct"),
-  extract_pvalues(res2, "count ~ had_patch"),
-  extract_pvalues(res3, "duration ~ correct"),
-  extract_pvalues(res4, "duration ~ had_patch")
-)
-
-# subset to interaction effects since those are our RQs and adjust
-interaction_rows <- grepl(":", pval_df$effect)
-pval_df$p_adjusted <- NA
-pval_df$p_adjusted[interaction_rows] <- p.adjust(pval_df$p_value[interaction_rows], method = "BH")
-
-# Print
-print(pval_df)
+gaze_valid_long
 ```
 
