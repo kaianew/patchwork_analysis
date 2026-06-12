@@ -29,7 +29,9 @@ date: 04-11-2026
 # install.packages("performance")
 # install.packages("lme4", type = "source")
 # install.packages("moments")
-install.packages("simr")
+# install.packages("simr")
+# install.packages("survival")
+# install.packages("coxme")
 ```
 
 # Load libraries
@@ -45,6 +47,8 @@ library(performance)
 library(car)
 library("ARTool")
 library(tidyverse)
+library(survival)
+library(coxme)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
@@ -83,6 +87,9 @@ full_df$accurate_about_correctness = (full_df$correct == TRUE & full_df$think_co
                                       (full_df$correct == FALSE & full_df$think_correct == 'N')
 full_df$accurate_about_patch_correctness = (full_df$correct == TRUE & full_df$think_correct == 'YP') | 
                                       (full_df$correct == FALSE & full_df$think_correct == 'N')
+
+# Make status column for survival analysis
+full_df$status = ifelse(full_df$time_minutes < 25, TRUE, FALSE)
 ```
 
 # Prep data from survey to put in analysis dataframe
@@ -327,22 +334,22 @@ gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fi
 
 full_correctness_model = glmer(correct ~ condition + professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
-                              + (1 | PID) + (1 | bug), 
-                              data = full_df, 
+                              + (1 | PID) + (1 | bug),
+                              data = full_df,
                               family = binomial)
 
 # Do LRT to see whether condition, professional_YOE, and professional_YOE:condition improve the model
 correctness_model_no_condition = glmer(correct ~ professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
-                              + (1 | PID) + (1 | bug), 
-                              data = full_df, 
+                              + (1 | PID) + (1 | bug),
+                              data = full_df,
                               family = binomial)
 condition_LRT = anova(full_correctness_model, correctness_model_no_condition)
 
 correctness_model_no_YOE = glmer(correct ~ condition
                               + java_intellij_experience + self_efficacy + num_prev
-                              + (1 | PID) + (1 | bug), 
-                              data = full_df, 
+                              + (1 | PID) + (1 | bug),
+                              data = full_df,
                               family = binomial)
 YOE_LRT = anova(full_correctness_model, correctness_model_no_YOE)
 
@@ -373,29 +380,48 @@ summary(correctness_model_no_YOE)
 summary(full_df$time_minutes)
 
 # Look at distribution shape
-# FIXME: survival analysis
 hist(full_df$time_minutes, breaks = 30)
 
 full_timing_model = glmer(time_minutes ~ condition + professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
-                              + (1 | PID) + (1 | bug), 
-                              data = full_df, 
+                              + (1 | PID) + (1 | bug),
+                              data = full_df,
                               family = Gamma(link="log"))
 
-# Check residuals because of skewness 
+# Check residuals because of skewness
 residuals = resid(full_timing_model)
 hist(residuals)
 paste0("This is the skewness of the residuals: ", skewness(residuals))
 
-# correcting for multiple comparisons for categorical predictors
-k1 <- glht(timing_model, mcp(condition="Tukey"))$linfct
-k2 <- glht(timing_model, mcp(num_prev="Tukey"))$linfct
-posthoc <- glht(timing_model, linfct = rbind(k1,k2))
-summary(posthoc)
-model_parameters(timing_model)
+# not normal! survival analysis to see how treatment condition affected response time
+survivor = Surv(time = full_df$time_minutes, event = full_df$status)
+survdiff(survivor ~ condition, data = full_df)
 
-r2(timing_model)
-Anova(timing_model)
+# fit KM curve
+km_fit = survfit(survivor ~ condition, data = full_df)
+summary(km_fit)
+
+cb_colors <- c("#0072B2", "#E69F00", "#000000")  # blue, orange, black
+
+plot(km_fit,
+     col = cb_colors,
+     lty = 1, lwd = 2,
+     xlab = "Time (minutes)",
+     ylab = "Probability of failing to create fix",
+     main = "Response time by condition")
+
+legend("topright",
+       legend = c("control", "correct", "overfitting"),
+       col = cb_colors,
+       lty = 1, lwd = 2)
+
+# Now, CPH model to see what predictors might be responsible for the differences
+cox_time_model = coxme(survivor ~ condition + professional_YOE
+                              + java_intellij_experience + self_efficacy + num_prev
+                              + (1 | PID) + (1 | bug),
+                              data = full_df)
+
+summary(cox_time_model)
 
 # TODO: Are professionals more likely to edit the patch they were given? Are students more likely to overfit? (passes tests x is incorrect for a new column of “overfitting_fix”)
 ```
@@ -490,36 +516,30 @@ summary(fix_duration_patch_model)
 # Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? (Section FIXME)
 # Hypotheses derived from interview data
 ```{r}
-# TODO: figure out survival analysis with anything where the outcome variable is time
-
 # Hypothesis: people who look at the patch early on may be anchored to the patch's solution and may finish the task faster/more correctly
-# expect condition:TTFF interaction ~ correctness and TTFF ~ time in glmer model
-# random effect structure is non-estimable
-# thus we do regular glm
-# todo: ADD  back in bug
-ttff_patch_model = glm(correct ~ ttff_patch + condition + bug, 
+# FIXME: random effect structure is non-estimable
+ttff_patch_model = glm(correct ~ ttff_patch + condition + bug,
                  data = gaze_valid_had_patch, family = binomial)
 summary(ttff_patch_model)
 
-ttff_patch_model_time = lmer(time_minutes ~ ttff_patch + condition + (1|PID) + (1|bug), 
-                 data = gaze_valid_had_patch)
-summary(ttff_patch_model_time)
-anova(ttff_patch_model_time)
-table(gaze_valid_had_patch$correct)
+# FIXME: should we include condition for the subsetted df?
+ttff_patch_cox = coxme(Surv(time_minutes, status) ~ condition + ttff_patch + (1 | PID) + (1 | bug), data = gaze_valid_had_patch)
+summary(ttff_patch_cox)
 
-# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more likely to debug correctly.
-# look at number of cross-AOI switches / time ~ correctness
+# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more performant. 
 attention_switch_model = glmer(correct ~ attention_switching_rate + condition + (1|PID) + (1|bug),
                  data = gaze_valid_df, family = binomial)
 summary(attention_switch_model)
 
-attention_switch_model_time = lmer(time_minutes ~ attention_switching_rate + condition + (1|PID) + (1|bug),
-                 data = gaze_valid_df)
+attention_switch_cox = coxme(Surv(time_minutes, status) ~ condition + attention_switching_rate + (1 | PID) + (1 | bug), data = gaze_valid_df)
+summary(attention_switch_cox)
+# after i recalculated attention switching to only include relevant AOIs, significant effect disappeared
 
 # -------- #
 # We are interested in seeing if focusing on any particular AOI predicts debugging correctness or speed beyond the treatment condition. We investigate with a series of  regressions and then compare for multcomp between outcome vars/same data
-relevant_aoi_duration_cols = c("Test.and.Run.Output_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration")
-# Patch_fixation_duration
+relevant_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration")
+
+relevant_patch_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration", "Patch_fixation_duration")
 
 # fill 0s for NAs in relevant AOI duration columns - they spent no time looking at these
 gaze_valid_df[relevant_aoi_duration_cols][is.na(gaze_valid_df[relevant_aoi_duration_cols])] = 0
@@ -534,57 +554,57 @@ gaze_valid_had_patch$total_fixation_duration = rowSums(gaze_valid_had_patch[, re
 gaze_valid_df[, relevant_aoi_prop_cols] = gaze_valid_df[, relevant_aoi_duration_cols] / gaze_valid_df$total_fixation_duration
 gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, relevant_patch_aoi_duration_cols] / gaze_valid_had_patch$total_fixation_duration
 
-# # Correctness: non-patch AOIs
-# # list of models we're training and p-values for multcomp
-# p_values = c()
-# for (col in relevant_aoi_prop_cols) {
-#   formula = as.formula(paste("correct ~", col, "+ condition + (1|PID) + (1|bug)"))
-#   correct_model = glmer(formula, data = gaze_valid_df, family = binomial)
-#   summary(correct_model)
-# 
-#   # save p-value for multcomp :3c
-#   coef_table = summary(model)$coefficients
-#   as.data.frame(coef_table)
-#   # p_values[col] = coef_table[col, "Pr(>|z|)"]
-# 
-# }
-# 
-# p_adjusted = p.adjust(p_values, method = "BH")
-# 
-# data.frame(
-#   aoi = relevant_aoi_prop_cols,
-#   p_raw = p_values,
-#   p_adjusted = p_adjusted
-# )
-# 
-# # Correctness: patch AOI
-# correct_patch_model = glmer(correct ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch, family = binomial)
-# summary(correct_patch_model)
-# 
-# # Timing: non-patch AOIs
-# # FIXME: again, survival analysis?
-# p_values_time = c()
-# for (col in relevant_aoi_prop_cols) {
-#   formula = as.formula(paste("time_minutes ~", col, "+ condition + (1|PID) + (1|bug)"))
-#   time_model = lmer(formula, data = gaze_valid_df)
-#   summary(time_model)
-# 
-#   # save p-value for multcomp :3c
-#   coef_table = summary(model)$coefficients
-#   p_values_time[col] = coef_table[col, "Pr(>|z|)"]
-# }
-# 
-# p_adjusted_time = p.adjust(p_values_time, method = "BH")
-# 
-# data.frame(
-#   aoi = relevant_aoi_prop_cols,
-#   p_raw = p_values_time,
-#   p_adjusted = p_adjusted_time
-# )
-# 
-# # Timing: patch AOI
-# time_patch_model = lmer(time_minutes ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch)
-# summary(time_patch_model)
+# Correctness: non-patch AOIs
+# list of models we're training and p-values for multcomp
+p_values = c()
+for (col in relevant_aoi_prop_cols) {
+  formula = as.formula(paste("correct ~", col, "+ condition + (1|PID) + (1|bug)"))
+  correct_model = glmer(formula, data = gaze_valid_df, family = binomial)
+  summary(correct_model)
+
+  # save p-value for multcomp :3c
+  coef_table = summary(model)$coefficients
+  print(as.data.frame(coef_table))
+  p_values[col] = coef_table[col, "Pr(>|t|)"]
+
+}
+
+p_adjusted = p.adjust(p_values, method = "BH")
+
+data.frame(
+  aoi = relevant_aoi_prop_cols,
+  p_raw = p_values,
+  p_adjusted = p_adjusted
+)
+
+# Correctness: patch AOI
+correct_patch_model = glmer(correct ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch, family = binomial)
+summary(correct_patch_model)
+
+# Timing: non-patch AOIs
+# FIXME: again, do survival analysis
+p_values_time = c()
+for (col in relevant_aoi_prop_cols) {
+  formula = as.formula(paste("time_minutes ~", col, "+ condition + (1|PID) + (1|bug)"))
+  time_model = lmer(formula, data = gaze_valid_df)
+  summary(time_model)
+
+  # save p-value for multcomp :3c
+  coef_table = summary(model)$coefficients
+  p_values_time[col] = coef_table[col, "Pr(>|t|)"]
+}
+
+p_adjusted_time = p.adjust(p_values_time, method = "BH")
+
+data.frame(
+  aoi = relevant_aoi_prop_cols,
+  p_raw = p_values_time,
+  p_adjusted = p_adjusted_time
+)
+
+# Timing: patch AOI
+time_patch_model = lmer(time_minutes ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch)
+summary(time_patch_model)
 ```
 
 # RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME)
@@ -628,7 +648,7 @@ gaze_valid_long <- gaze_valid_df %>%
     # Strip leading "prop_" and trailing "_fixation_duration"
     AOI = str_remove(AOI, "^prop_"),
     AOI = str_remove(AOI, "_fixation_duration$"),
-    # Clean up dots in names like "Test.and.Run.Output" → "Test and Run Output"
+    # Clean up dots in names like "Test.and.Runtime.Feedback" --> "Test and Runtime Feedback"
     AOI = str_replace_all(AOI, "\\.", " "),
     # Convert to factors
     PID       = factor(PID),

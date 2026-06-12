@@ -20,6 +20,8 @@ paths = get_subdirectories()
 # we want individual markov chains
 # but we want to build aggregate markov chains for correct vs. incorrect sessions, and for patch and no patch sessions
 
+relevant_aois = ['Source Code', 'Test and Runtime Feedback', 'Browser', 'Patch', 'Tests']
+
 fixation_counts_correct = {}
 fixation_durations_correct = {}
 fixation_counts_incorrect = {}
@@ -196,6 +198,11 @@ for path in paths:
     path = os.path.join(path, filename)
     df = pd.read_csv(path)
 
+    # Rename all cells in the AOI column that are 'Execution Inspection' to 'Test and Run Output'
+    # and rename Test and Run Output to Test and Runtime Feedback (to reflect recent AOI decision)
+    df['AOI'] = df['AOI'].replace('Execution Inspection', 'Test and Run Output')
+    df['AOI'] = df['AOI'].replace('Test and Run Output', 'Test and Runtime Feedback')
+
     # fixation_group_id is the colname that has fixation IDs
     fixation_ids = np.array(sorted(df['fixation_group_id'].dropna().unique()), dtype=int)
     # now look for the rows in df that have each fixation ID, and find the majority AOI
@@ -204,7 +211,7 @@ for path in paths:
 
     df['file_AOI'] = np.nan
     df['file_AOI'] = df['file_AOI'].astype(object)
-    # maybe there's some way to do this as a list comprehension?
+    
     for fixation_id in fixation_ids:
         fixation_rows = df[df['fixation_group_id'] == fixation_id]
         majority_AOI = fixation_rows['AOI'].mode()[0]  # get the most common AOI for this fixation
@@ -251,7 +258,8 @@ for path in paths:
         if fixation_rows.empty:
             continue
         aoi = fixation_rows['fixation_AOI'].iloc[0]
-        if aoi == '-' or aoi == 'OOB':
+        # simply don't include AOIs that we don't care about
+        if aoi not in relevant_aois:
             continue
         decoded_aoi_sequence.append(aoi)
 
