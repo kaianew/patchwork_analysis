@@ -141,6 +141,36 @@ also a little more error-prone to implement, so, _PLEASE_ stop introducing
 copy-paste bugs in your R code.  Ask Claude Code to scrutinize it carefully for
 such errors, if nothing else. 
 
+* NEW FROM CLAIRE, related to the fault localization test you want to run, and a
+DIFFERENT ERROR.  On line 617, you do a logistic regression of looked_at_buggy_method ~
+condition... and that gives you a `Warning:  Hessian is numerically singular:
+ parameters are not uniquely determined`.
+
+This is a separation problem, namely that a fixed effect (condition) perfectly
+predicts the binary outcome.  Data breaks down as:
+
+           did NOT look   looked
+  control        8          28
+  correct        0          34
+  overfitting    2          32
+
+All people with the correct condition looked at the buggy method, so correct
+perfectly predicts looked = true, which ONE HUNDO PERCENT freaks out logistic
+regression because it wants to set the coefficient to +infinity.  
+
+Fortunately, this is...good? Actually? "everyone with a correct patch looked at
+the buggy method" supports your hypothesis, the model is choking because the
+effect is so strong. 
+
+There are some options here but I think a small-sample exact test (like Fisher's
+exact on the table) instead of a regression is probably the most
+straightforward and generally less stupid than trying to model around a
+regression coefficient of +infinity. 
+
+The other thing you probably should do, though, is also collapse overfitting into
+correct to just compare "has patch" with "control".  Your logistic regression
+won't choke there but is probably still overkill, Fisher's exact on a 2x2 table
+is fine. 
 
 * Survival analysis for regressions with time as the outcome (time to first fixation on buggy method, time\_minutes)? Still have not solved the skewed residuals problem  
 
