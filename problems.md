@@ -172,6 +172,18 @@ correct to just compare "has patch" with "control".  Your logistic regression
 won't choke there but is probably still overkill, Fisher's exact on a 2x2 table
 is fine. 
 
+THAT SAID I think "time to first look at buggy method" is almost certainly more
+interesting (I hope?), but that needs a survival model. You want to look at
+residuals for this (you have a comment) before deciding and sure, you can do
+that, but it's pretty conceptually clear that it's a survival model situation.
+The event is "first fixation on the buggy method, time is ttff_buggy_method and
+people who never looked are censored (not dropped, which is what's currently
+happening). 
+
+This would be extra nice because you can answer both "whether you ever looked" and
+"how quickly" in a single model instead of splitting them into a logistic and
+(broken) linear model (as the code now does it).  
+
 * Survival analysis for regressions with time as the outcome (time to first fixation on buggy method, time\_minutes)? Still have not solved the skewed residuals problem  
 
 - Claire response: first, yes, survival analysis is the right thing to do. I'm a
@@ -219,6 +231,5 @@ relationship you care about (e.g., does which patch type they  got impact the
 ttff_patch -> outcome connection?).  You want to test that, and the effect of
 condition on its own isn't the question that actually matters, but 
 rather the impact of condition on the thing you _do_ care about. 
-
 
 * Still haven’t selected outliers definitively but P1t1 needs to go (by inspection it is very spotty because they were far away from the trackbox)
