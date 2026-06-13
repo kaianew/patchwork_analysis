@@ -7,9 +7,9 @@ Outstanding questions/issues:
 To scope, I am addressing the error you describe above, random effects
 not being estimable, which usually shows up as a "boundary (singular) fit". I
 saw other errors in the output, like "Hessian is numerically singular," a
-convergence failure, etc., and these are all different. So read the warning or
-reason the model is failing and research what it means to identify potential
-fixes.  
+convergence failure, etc., and these are all different. So you have to read the
+warning or reason the model is failing and research what it means to identify
+potential fixes.  
 
 To the issue you mention above: A random intercept needs replication within
 levels to estimate variance.  If you're including something like (1|PID), you're
@@ -144,6 +144,22 @@ such errors, if nothing else.
 
 * Survival analysis for regressions with time as the outcome (time to first fixation on buggy method, time\_minutes)? Still have not solved the skewed residuals problem  
 
+- Claire response: first, yes, survival analysis is the right thing to do. I'm a
+little confused by "have not solved skewed residuals" because by my
+understanding, that's what survival analysis does/solves for us (fixes the skew on the
+residual caused by the right-censoring of the data). 
+
+Cox does have a proportional-hazards assumption (instead of a residual-normality
+assumption) (namely: each predictor's effect on the hazard is constant over
+time), so you need to check it, apparently cox.zph() will do this for you
+(Schoenfeld residuals), you want a non-significant result. 
+
+BUT. I want to double check that the status (computed line 92) you're using the models you've
+started is the status you want to use.  I think it's only looking at time to completion,
+not success/correctness.  The y-axis on the KM curve per line 410 is "probability
+of failing to create a fix", which isn't what your event is in the survival
+function.  The event is "time to stop". This probably warrants a github issue,
+honestly, so I'll file one after I put Charlie to bed. 
 
 * Should we include condition as a predictor for analyses on gaze data where participants had a patch? Has two levels: overfitting, correct. We saw similar effects from both types of patches on response time  
 
