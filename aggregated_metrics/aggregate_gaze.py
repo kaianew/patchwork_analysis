@@ -21,6 +21,7 @@ paths = get_subdirectories()
 # but we want to build aggregate markov chains for correct vs. incorrect sessions, and for patch and no patch sessions
 
 relevant_aois = ['Source Code', 'Test and Runtime Feedback', 'Browser', 'Patch', 'Tests']
+scarf_segments = []
 
 fixation_counts_correct = {}
 fixation_durations_correct = {}
@@ -229,6 +230,9 @@ for path in paths:
     else:
         got_correct = False
 
+    # record this for the scarf plots
+    condition_label = analysis_df[(analysis_df['PID'] == pid) & (analysis_df['task_no'] == task_no)]['condition'].values[0]
+
     has_patch = analysis_df[(analysis_df['PID'] == pid) & (analysis_df['task_no'] == task_no)]['condition'].values[0]
     if has_patch == 'overfitting' or has_patch == 'correct':
         has_patch = True
@@ -253,11 +257,33 @@ for path in paths:
     # Build an AOI sequence per participant-task, omitting '-' and OOB transitions
     # Used in Markov chain construction and attention switching metric.
     decoded_aoi_sequence = []
+    session_start = df['timestamp'].min()
     for fixation_id in fixation_ids:
         fixation_rows = df[df['fixation_group_id'] == fixation_id]
         if fixation_rows.empty:
             continue
         aoi = fixation_rows['fixation_AOI'].iloc[0]
+
+        # scarf row (keep all AOIs, bucket non-core as Other)
+        # FIXME: check to make sure this makes sense
+        fixation_start_ts = fixation_rows['timestamp'].min()
+        fixation_duration_ms = fixation_rows['fixation_group_duration'].iloc[0]
+        start_min = (fixation_start_ts - session_start) / 1000 / 60
+        duration_min = fixation_duration_ms / 1000 / 60
+        end_min = start_min + duration_min
+        scarf_aoi = aoi if aoi in relevant_aois else 'Other'
+
+        scarf_segments.append({
+            'PID': pid,
+            'task_no': task_no,
+            'condition': condition_label,
+            'fixation_group_id': fixation_id,
+            'start_min': start_min,
+            'duration_min': duration_min,
+            'end_min': end_min,
+            'scarf_aoi': scarf_aoi
+        })
+
         # simply don't include AOIs that we don't care about
         if aoi not in relevant_aois:
             continue
@@ -341,5 +367,7 @@ with open('markov_chain_structures.pkl', 'wb') as f:
         'fixation_counts_no_patch': fixation_counts_no_patch,
         'fixation_durations_no_patch': fixation_durations_no_patch
     }, f)
+
+    pd.DataFrame(scarf_segments).to_csv('scarf_plot_input.csv', index=False)
 
     print(f"All done :) at {datetime.now()}", flush=True)

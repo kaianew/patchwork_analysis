@@ -8,30 +8,18 @@ date: 04-11-2026
 
 ```{r}
 # install required packages
-# options(repos = list(CRAN="http://cran.rstudio.com/"))
-# install.packages("knitr")
-# install.packages("rmarkdown")
 # install.packages("multcomp")
-# install.packages("likert")
-# install.packages("lmerTest")
 # install.packages("parameters")
-# install.packages("sqldf")
-# install.packages("stargazer")
-# install.packages("GGally")
-# install.packages("broom.mixed")
-# install.packages("patchwork")
-# install.packages("ggpubr")
-# install.packages("merDeriv")
-# install.packages("AER")
-# install.packages("effectsize")
 # install.packages("tidyverse")
 # install.packages("ggplot2")
+# install.packages("ARTool")
 # install.packages("performance")
 # install.packages("lme4", type = "source")
-# install.packages("moments")
-# install.packages("simr")
 # install.packages("survival")
 # install.packages("coxme")
+# install.packages("psych")
+# install.packages("emmeans")
+# install.packages("dplyr")
 ```
 
 # Load libraries
@@ -49,6 +37,7 @@ library("ARTool")
 library(tidyverse)
 library(survival)
 library(coxme)
+library(emmeans)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
@@ -298,23 +287,47 @@ full_df = merge(full_df,
 ```{r}
 # FIXME: not necessarily required to look at source code, should find a better thing to subset on
 gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
+gaze_valid_df = droplevels(gaze_valid_df)
 
 # boolean for whether they looked at the buggy method
 gaze_valid_df$looked_at_buggy_method = ifelse(is.na(gaze_valid_df$ttff_buggy_method), FALSE, TRUE)
-# FIXME: do we want to drop people who didn't look at the patch from this dataframe?
+# Make status and response columns for survival analysis
+gaze_valid_df$fl_status = ifelse(gaze_valid_df$ttff_buggy_method < 25 & !is.na(gaze_valid_df$ttff_buggy_method), TRUE, FALSE)
+gaze_valid_df$ttff_fl_for_model = ifelse(
+  is.na(gaze_valid_df$ttff_buggy_method),
+  25,  # censored at 25 minutes
+  pmin(gaze_valid_df$ttff_buggy_method, 25)  # in rare event they found in between warning me and me walking over
+)
+
+relevant_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration")
+
+relevant_patch_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration", "Patch_fixation_duration")
+
+# fill 0s for NAs in relevant AOI duration columns - they spent no time looking at these
+gaze_valid_df[relevant_aoi_duration_cols][is.na(gaze_valid_df[relevant_aoi_duration_cols])] = 0
+
+relevant_aoi_prop_cols = paste0("prop_", relevant_aoi_duration_cols)
+relevant_patch_aoi_prop_cols = paste0("prop_", relevant_patch_aoi_duration_cols)
+
+# Create columns for the total fixation duration, then columns for duration proportion per AOI
+gaze_valid_df$total_fixation_duration = rowSums(gaze_valid_df[, relevant_aoi_duration_cols])
+gaze_valid_df[, relevant_aoi_prop_cols] = gaze_valid_df[, relevant_aoi_duration_cols] / gaze_valid_df$total_fixation_duration
 
 full_df_had_patch = full_df[full_df$had_patch, ]
 # relevel bc no control
-full_df_had_patch$condition = factor(full_df_had_patch$condition, 
-                                       levels = c("correct", "overfitting"))
-levels(full_df_had_patch$condition)
+full_df_had_patch = droplevels(full_df_had_patch)
 
 gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fixation_count), ]
+gaze_valid_had_patch = droplevels(gaze_valid_had_patch)
+gaze_valid_had_patch[relevant_patch_aoi_duration_cols][is.na(gaze_valid_had_patch[relevant_patch_aoi_duration_cols])] = 0
+gaze_valid_had_patch$total_fixation_duration = rowSums(gaze_valid_had_patch[, relevant_patch_aoi_duration_cols])
+gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, relevant_patch_aoi_duration_cols] / gaze_valid_had_patch$total_fixation_duration
 ```
 
 # RQ1a: How do patch suggestions affect time and accuracy of debugging sessions? (Section FIXME) 
 ```{r}
 # TODO: read in 2024 data and see if our participants are significantly more correct/faster (try and understand expertise to give evidence for why we might be seeing different results/no trend)
+# TODO: look at just data where they had a patch 
 
 # And now, as determined by the DAG, participant insights, and prior literature, we define the maximal model
 # FIXED EFFECTS:
@@ -331,6 +344,10 @@ gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fi
 # RANDOM EFFECTS:
 # bug, PID
 # optimizer maybe helps the convergence some because it goes for more iterations
+
+# No clear difference between control and overfitting for correctness
+# Indicates perhaps our participants are 1) better at debugging or 2) these bugs are hard enough at baseline
+table(full_df$correct, full_df$condition)
 
 full_correctness_model = glmer(correct ~ condition + professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
@@ -407,7 +424,7 @@ plot(km_fit,
      col = cb_colors,
      lty = 1, lwd = 2,
      xlab = "Time (minutes)",
-     ylab = "Probability of failing to create fix",
+     ylab = "Probability of failing to submit response",
      main = "Response time by condition")
 
 legend("topright",
@@ -513,85 +530,78 @@ fix_duration_patch_model = lmer(avg_fixation_duration ~ condition + ttff_patch +
 summary(fix_duration_patch_model)
 ```
 
-# Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? (Section FIXME)
+# Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 1 (Section FIXME)
 # Hypotheses derived from interview data
 ```{r}
-# Hypothesis: people who look at the patch early on may be anchored to the patch's solution and may finish the task faster/more correctly
-# FIXME: random effect structure is non-estimable
-ttff_patch_model = glm(correct ~ ttff_patch + condition + bug,
-                 data = gaze_valid_had_patch, family = binomial)
+# Demonstrate why we can't include PID as a random effect for these analyses (only one sample per participant for some, so not estimable)
+table(gaze_valid_had_patch$condition, gaze_valid_had_patch$PID)
+
+ttff_patch_valid_df = gaze_valid_had_patch[!is.na(gaze_valid_had_patch$ttff_patch), ]
+
+# Hypothesis: people who look at the patch early on may be anchored to the patch's solution and may finish the task faster/more correctly (dependent on condition)
+ttff_patch_model = glmer(correct ~ ttff_patch + (1|bug),
+                 data = ttff_patch_valid_df, family = binomial)
 summary(ttff_patch_model)
 
-# FIXME: should we include condition for the subsetted df?
-ttff_patch_cox = coxme(Surv(time_minutes, status) ~ condition + ttff_patch + (1 | PID) + (1 | bug), data = gaze_valid_had_patch)
+m0 = glmer(correct ~ condition + (1|bug), data = ttff_patch_valid_df, family = binomial)
+summary(m0)
+m1 = glmer(correct ~ condition + ttff_patch + (1|bug),
+                 data = ttff_patch_valid_df, family = binomial)
+LRT1 = anova(m0, m1)
+LRT1
+# Not significant and ttff_patch does not improve the model above condition -- but overfitting patches predict incorrect fixes with correct patches as the comparison level
+
+# FIXME: include time-dependent covariate, convert df into long format to test its effects on response rate
+ttff_patch_cox = coxme(Surv(time_minutes, status) ~ condition + ttff_patch + (1 | bug), data = gaze_valid_had_patch)
 summary(ttff_patch_cox)
 
-# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more performant. 
-attention_switch_model = glmer(correct ~ attention_switching_rate + condition + (1|PID) + (1|bug),
+# Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more performant.
+attention_switch_model = glmer(correct ~ attention_switching_rate + (1|PID) + (1|bug),
                  data = gaze_valid_df, family = binomial)
 summary(attention_switch_model)
 
-attention_switch_cox = coxme(Surv(time_minutes, status) ~ condition + attention_switching_rate + (1 | PID) + (1 | bug), data = gaze_valid_df)
+attention_switch_cox = coxme(Surv(time_minutes, status) ~ attention_switching_rate + (1|PID) + (1 | bug), data = gaze_valid_df)
 summary(attention_switch_cox)
-# after i recalculated attention switching to only include relevant AOIs, significant effect disappeared
+```
+# Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 2 (Section FIXME)
+```{r}
+table(gaze_valid_df$condition, gaze_valid_df$correct)
+# Large separation between correctness and condition
 
-# -------- #
-# We are interested in seeing if focusing on any particular AOI predicts debugging correctness or speed beyond the treatment condition. We investigate with a series of  regressions and then compare for multcomp between outcome vars/same data
-relevant_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration")
-
-relevant_patch_aoi_duration_cols = c("Test.and.Runtime.Feedback_fixation_duration", "Tests_fixation_duration", "Source.Code_fixation_duration", "Browser_fixation_duration", "Patch_fixation_duration")
-
-# fill 0s for NAs in relevant AOI duration columns - they spent no time looking at these
-gaze_valid_df[relevant_aoi_duration_cols][is.na(gaze_valid_df[relevant_aoi_duration_cols])] = 0
-gaze_valid_had_patch[relevant_patch_aoi_duration_cols][is.na(gaze_valid_had_patch[relevant_patch_aoi_duration_cols])] = 0
-
-relevant_aoi_prop_cols = paste0("prop_", relevant_aoi_duration_cols)
-relevant_patch_aoi_prop_cols = paste0("prop_", relevant_patch_aoi_duration_cols)
-
-# Create columns for the total fixation duration, then columns for duration proportion per AOI
-gaze_valid_df$total_fixation_duration = rowSums(gaze_valid_df[, relevant_aoi_duration_cols])
-gaze_valid_had_patch$total_fixation_duration = rowSums(gaze_valid_had_patch[, relevant_patch_aoi_duration_cols])
-gaze_valid_df[, relevant_aoi_prop_cols] = gaze_valid_df[, relevant_aoi_duration_cols] / gaze_valid_df$total_fixation_duration
-gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, relevant_patch_aoi_duration_cols] / gaze_valid_had_patch$total_fixation_duration
-
-# Correctness: non-patch AOIs
-# list of models we're training and p-values for multcomp
-p_values = c()
-for (col in relevant_aoi_prop_cols) {
-  formula = as.formula(paste("correct ~", col, "+ condition + (1|PID) + (1|bug)"))
-  correct_model = glmer(formula, data = gaze_valid_df, family = binomial)
-  summary(correct_model)
-
-  # save p-value for multcomp :3c
-  coef_table = summary(model)$coefficients
-  print(as.data.frame(coef_table))
-  p_values[col] = coef_table[col, "Pr(>|t|)"]
-
-}
-
-p_adjusted = p.adjust(p_values, method = "BH")
-
-data.frame(
-  aoi = relevant_aoi_prop_cols,
-  p_raw = p_values,
-  p_adjusted = p_adjusted
-)
-
-# Correctness: patch AOI
-correct_patch_model = glmer(correct ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch, family = binomial)
+# Correctness: patch AOI (we are interested in interaction effect)
+# needed to remove random effect of bug because it was not estimable in interaction term and we want the models to be comparable
+correct_patch_model = glm(correct ~ prop_Patch_fixation_duration, data = gaze_valid_had_patch, family = binomial)
 summary(correct_patch_model)
 
+m0 = glm(correct ~ condition, data = gaze_valid_had_patch, family = binomial)
+m1 = glm(correct ~ condition + prop_Patch_fixation_duration, data = gaze_valid_had_patch, family = binomial)
+LRT1 = anova(m0, m1, test = "Chisq")
+LRT1
+# does not improve
+
+# Because we have strong separation between correctness of fix and treatment condition among these data, let's just look at the numbers for a trend here (this is a limitation)
+gaze_valid_had_patch %>%
+  group_by(condition, correct) %>%
+  summarise(n = n(), 
+            mean_prop = mean(prop_Patch_fixation_duration),
+            min_prop = min(prop_Patch_fixation_duration),
+            max_prop = max(prop_Patch_fixation_duration))
+library(ggplot2)
+ggplot(gaze_valid_had_patch, aes(x = prop_Patch_fixation_duration, y = correct, color = condition)) +
+  geom_point() +
+  facet_wrap(~condition)
+
 # Timing: non-patch AOIs
-# FIXME: again, do survival analysis
 p_values_time = c()
 for (col in relevant_aoi_prop_cols) {
-  formula = as.formula(paste("time_minutes ~", col, "+ condition + (1|PID) + (1|bug)"))
-  time_model = lmer(formula, data = gaze_valid_df)
+  formula = as.formula(paste("Surv(time = gaze_valid_df$time_minutes, event = gaze_valid_df$status) ~", col, "+ condition + (1|PID) + (1|bug)"))
+  time_model = coxme(formula, data = gaze_valid_df)
   summary(time_model)
 
   # save p-value for multcomp :3c
-  coef_table = summary(model)$coefficients
-  p_values_time[col] = coef_table[col, "Pr(>|t|)"]
+  coef_table = summary(time_model)$coefficients
+  print(coef_table)
+  p_values_time[col] = coef_table[col, "p"]
 }
 
 p_adjusted_time = p.adjust(p_values_time, method = "BH")
@@ -602,41 +612,62 @@ data.frame(
   p_adjusted = p_adjusted_time
 )
 
-# Timing: patch AOI
-time_patch_model = lmer(time_minutes ~ prop_Patch_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_had_patch)
-summary(time_patch_model)
+survival_feedback_dur = coxme(Surv(time = time_minutes, event = status) ~ prop_Test.and.Runtime.Feedback_fixation_duration + condition + (1|PID) + (1|bug), data = gaze_valid_df)
+summary(survival_feedback_dur)
+
+# spending more of your time looking at test/runtime feedback is associated with a significantly higher hazard of responding (controlling for condition)
+cor(gaze_valid_df$prop_Test.and.Runtime.Feedback_fixation_duration, gaze_valid_df$time_minutes, use = "complete.obs")
+summary(aov(prop_Test.and.Runtime.Feedback_fixation_duration ~ condition, data = gaze_valid_df))
+# not correlated strongly with time as an outcome and condition does not predict it, so it independently is predictive of response hazard
+
+# spending more of your time looking at the patch is associated with a significantly higher hazard of responding (controlling for condition)
+survival_patch_dur = coxme(Surv(time = time_minutes, event = status) ~ prop_Patch_fixation_duration + condition + (1|bug), data = gaze_valid_had_patch)
+summary(survival_patch_dur)
+
+cor(gaze_valid_had_patch$prop_Patch_fixation_duration, gaze_valid_had_patch$time_minutes, use = "complete.obs")
+summary(aov(prop_Patch_fixation_duration ~ condition, data = gaze_valid_had_patch))
+# condition does correlate with proportion of fixation duration on patch -- investigate with fuller model in RQ3
+# not a mediator because condition (overfitting vs. correct) does not predict response time
+# TODO: determine how to report
 ```
 
-# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME)
+# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 1
 ```{r}
-# Hypothesis: Overwhelmingly, developers report having access to a patch speeding up fault localization or making it possible for them. When developers have access to a patch, do they find the location of the bug faster, or find it at all? 
-# TTFF on buggy method ~ has_patch
-# check for subset of trials on Chart 12 -- this one had an overfitting patch that was not in the correct method
-# First do logistic regression: did having a patch help people look at the buggy method more at all? 
-# Then, see if it made them look at it faster
-fl_model = glmer(looked_at_buggy_method ~ condition + (1|PID) + (1|bug), 
-                 data = gaze_valid_df, family = binomial)
-summary(fl_model)
+# Hypothesis: Overwhelmingly, developers report having access to a patch speeding up fault localization or making it possible for them. When developers have access to a patch, do they find the location of the bug faster?
+# ttff_fl_for_model should be 25 if NA since they "survived"/didn't find the bug
+fl_cox_model = coxme(Surv(ttff_fl_for_model, fl_status) ~ condition + (1 | PID) + (1 | bug), data = gaze_valid_df)
+summary(fl_cox_model)
+# yea! people found the bug substantially faster when they had a patch
 
-fl_time_model = lmer(ttff_buggy_method ~ condition + (1|PID) + (1|bug),
-                     data = gaze_valid_df)
-summary(fl_time_model) # FIXME: look at residuals and try survival analysis if no good
+# see trend if patch also helped people find the bug with chart12 (which had wrong FL)
+chart12_gaze_valid = gaze_valid_df[gaze_valid_df$bug == "chart12", ]
+chart12_gaze_valid = droplevels(chart12_gaze_valid)
+nrow(chart12_gaze_valid)
+# 26 items
 
-# TODO: try simple test that is meant for small sample size to see if it also helped people find the bug with chart12 (which had wrong FL)
+# Check n per condition, and how many fixated vs. never fixated on buggy method
+table(chart12_gaze_valid$condition)
+tapply(!is.na(chart12_gaze_valid$ttff_buggy_method), chart12_gaze_valid$condition, sum)
+
+tapply(chart12_gaze_valid$ttff_buggy_method, chart12_gaze_valid$condition, mean, na.rm = TRUE)
+tapply(chart12_gaze_valid$ttff_buggy_method, chart12_gaze_valid$condition, median, na.rm = TRUE)
+# this pattern is directionally consistent with the overall finding (but with small n, take with grain of salt and need to study more)
+
 
 # Hypothesis: Along similar lines, developers also report having access to a patch narrowing their focus. When developers have access to a patch, do they look at a more narrow slice of a codebase or have a "pointier" distribution of attention?
-# num_files_looked_at (should account for time confound), fixation_duration_entropy
+
 # an offset just makes the coefficient 1, so creates assumption where there is a 1:1 relationship between the amount of time spent on task and the number of files you look at
-num_files_m <- glmer(num_files_looked_at ~ condition + offset(log(time_minutes)) + (1|PID) + (1|bug), 
+num_files_m = glmer(num_files_looked_at ~ condition + offset(log(time_minutes)) + (1|PID) + (1|bug), 
            data = gaze_valid_df, family = poisson)
 summary(num_files_m)
 
 entropy_m = lmer(fixation_duration_entropy ~ condition + (1|PID) + (1|bug), 
                  data = gaze_valid_df)
-# ------ #
-# We would like to see if distribution of attention changed over AOIs we care about with the addition of a patch
-gaze_valid_df
+```
 
+# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 2
+```{r}
+# We would like to see if distribution of attention changed over AOIs we care about with the addition of a patch
 gaze_valid_long <- gaze_valid_df %>%
   dplyr::select(PID, bug, condition, had_patch, all_of(relevant_aoi_prop_cols)) %>%
   pivot_longer(
@@ -659,9 +690,30 @@ gaze_valid_long <- gaze_valid_df %>%
 
 gaze_valid_long
 
-# random effects might need to go
-m <- art(prop_fixation ~ condition * AOI + (1|PID),
+gaze_valid_long %>%
+  group_by(had_patch, AOI) %>%
+  summarise(
+    mean_prop = mean(prop_fixation, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(x = had_patch, y = mean_prop, fill = AOI)) +
+  geom_col(position = "stack") +
+  labs(y = "Mean proportion of fixation duration", x = "Condition", fill = "AOI") +
+  theme_minimal()
+
+m = art(prop_fixation ~ condition * AOI,
          data = gaze_valid_long)
 anova(m)
+
+# we observe no difference in fixation duration distribution over non-patch AOIs between conditions
+
+# What about the patch AOI? do people spend more time looking at the patch in either condition? 
+# we know they do from earlier
+patch_dur_model = lmer(prop_Patch_fixation_duration ~ condition + (1|bug), data = gaze_valid_had_patch)
+summary(patch_dur_model)
+
+emm = emmeans(patch_dur_model, ~ condition)
+emm
+# diff is 3.1% of fixation time, relative reduction of 40%
 ```
 
