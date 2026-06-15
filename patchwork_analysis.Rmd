@@ -121,9 +121,9 @@ survey[, 32:36] = lapply(survey[, 32:36], fill)
 
 
 # level of performance (Q3_1, Q46_1, Q52_1) should be inverse
-survey$Q3_1 = 21 - survey$Q3_1
-survey$Q46_1 = 21 - survey$Q46_1
-survey$Q52_1 = 21 - survey$Q52_1
+survey$Q3_1 = 20 - survey$Q3_1
+survey$Q46_1 = 20 - survey$Q46_1
+survey$Q52_1 = 20 - survey$Q52_1
 
 survey$t1_cognitive_load = rowMeans(survey[, 20:24])
 survey$t2_cognitive_load = rowMeans(survey[, 26:30])
@@ -427,7 +427,7 @@ plot(km_fit,
      col = cb_colors,
      lty = 1, lwd = 2,
      xlab = "Time (minutes)",
-     ylab = "Probability of failing to submit response",
+     ylab = "Probability of failing to produce response",
      main = "Response time by condition")
 
 legend("topright",
