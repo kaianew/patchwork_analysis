@@ -18,6 +18,7 @@ date: 04-11-2026
 # install.packages("survival")
 # install.packages("coxme")
 # install.packages("psych")
+# install.packages("lmerTest")
 # install.packages("emmeans")
 # install.packages("dplyr")
 # install.packages("broom.mixed")
@@ -40,6 +41,7 @@ library(survival)
 library(coxme)
 library(emmeans)
 library(broom.mixed)
+library(lmerTest)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
@@ -329,7 +331,7 @@ full_df = merge(full_df,
 # FIXME: not necessarily required to look at source code, should find a better thing to subset on
 gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
 # Drop P1t1 as well due to manual inspection (following best practices for ascertaining gaze data quality)
-gaze_valid_df = gaze_valid_df[!(gaze_valid_df$PID == 1 & gaze_valid_df$task_no == 1), ]
+gaze_valid_df = gaze_valid_df[!(gaze_valid_df$PID == "P1" & gaze_valid_df$task_no == 1), ]
 gaze_valid_df = droplevels(gaze_valid_df)
 
 # boolean for whether they looked at the buggy method
@@ -458,6 +460,8 @@ paste0("This is the skewness of the residuals: ", skewness(residuals))
 
 # not normal! survival analysis to see how treatment condition affected response time
 survivor = Surv(time = full_df$time_minutes, event = full_df$status)
+# addition: do analysis with event being time + got correct 
+
 survdiff(survivor ~ condition, data = full_df)
 
 # fit KM curve
@@ -526,6 +530,8 @@ as.data.frame.matrix(correct_tab)
 as.data.frame.matrix(patch_correct_tab)
 as.data.frame.matrix(submit_correct_tab)
 
+# set seed so results are deterministic
+set.seed(20260622)
 # sparse, so we simulate
 test_patch = chisq.test(patch_correct_tab, simulate.p.value = TRUE, B = 10000)
 test_correct = chisq.test(correct_tab, simulate.p.value = TRUE, B = 10000)
@@ -548,8 +554,8 @@ professional_patch_correct_tab = table(full_df_had_patch$professional_identity, 
 professional_correct_tab
 professional_patch_correct_tab
 
-test_prof_accuracy = chisq.test(professional_correct_tab)
-test_prof_patch_accuracy = chisq.test(professional_patch_correct_tab)
+test_prof_accuracy = chisq.test(professional_correct_tab, simulate.p.value = TRUE, B = 10000)
+test_prof_patch_accuracy = chisq.test(professional_patch_correct_tab, simulate.p.value = TRUE, B = 10000)
 
 test_prof_accuracy
 test_prof_patch_accuracy
@@ -564,7 +570,7 @@ wilcox.test(professional_YOE ~ accurate_about_correctness,
             data = full_df)
 # Wilcoxon rank-sum test
 
-tapply(professional_YOE, full_df_had_patch$accurate_about_patch_correctness, median)
+aggregate(professional_YOE ~ accurate_about_patch_correctness, data = full_df_had_patch, FUN = median)
 
 # Verdict: we do not have significant evidence to suggest this is the case.
 # However, trend for accurate about patch correctness
@@ -668,7 +674,7 @@ ggplot(gaze_valid_had_patch, aes(x = prop_Patch_fixation_duration, y = correct, 
 # Timing: non-patch AOIs
 p_values_time = c()
 for (col in relevant_aoi_prop_cols) {
-  formula = as.formula(paste("Surv(time = gaze_valid_df$time_minutes, event = gaze_valid_df$status) ~", col, "+ condition + (1|PID) + (1|bug)"))
+  formula = as.formula(paste("Surv(time_minutes, status) ~", col, "+ condition + (1|PID) + (1|bug)"))
   time_model = coxme(formula, data = gaze_valid_df)
   summary(time_model)
 
@@ -735,6 +741,7 @@ summary(num_files_m)
 
 entropy_m = lmer(fixation_duration_entropy ~ condition + (1|PID) + (1|bug), 
                  data = gaze_valid_df)
+summary(entropy_m)
 ```
 
 # RQ2: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 2
