@@ -20,6 +20,7 @@ date: 04-11-2026
 # install.packages("psych")
 # install.packages("emmeans")
 # install.packages("dplyr")
+# install.packages("broom.mixed")
 ```
 
 # Load libraries
@@ -38,10 +39,11 @@ library(tidyverse)
 library(survival)
 library(coxme)
 library(emmeans)
+library(broom.mixed)
 ```
 # Read in analysis dataframe and preprocess columns
 ```{r}
-# Make full df, gaze-valid df, full df had patch, gaze-valid had patch 
+# Make full df
 full_df = read.csv("timing_correctness_data.csv")
 
 # Make boolean columns
@@ -140,8 +142,6 @@ full_df$cognitive_load = lookup[
   )
 ]
 
-# TODO: maybe OCEAN personality data, but that's not on the critical path
-
 # Chop off header in survey
 survey = survey[4:nrow(survey), ]
 
@@ -193,9 +193,12 @@ screener$professional_identity = ifelse(
   screener$professional_identity
 )
 screener$professional_identity = as.factor(screener$professional_identity)
+
+summary(screener$professional_identity)
+table(screener$professional_identity, screener$Q13)
 ```
 
-# Demographics of participants
+# Demographics of participants and bug difficulty
 ```{r}
 # Find demographics: min max median age and YOE
 screener$Age = as.numeric(screener$Age)
@@ -209,6 +212,46 @@ paste0("Maximum YOE: ", max(screener$professional_YOE, na.rm=TRUE))
 
 # Q13 is gender, Q16 is are you a student (answers: Yes, I am a Master's student, Yes, I am a Ph.D. student, No, Yes, I am undergraduate), Q10 is have you worked or are you currently working... with "Yes, I currently work at one" being the professional label
 as.data.frame(table(screener$Q13))
+
+# Which bugs were able to be debugged correctly without a patch + at what rate? 
+# goal: make table that lists bug, num correct about solution in control group, total in control group, percent. for each bug
+bug_summary <- full_df %>%
+  filter(condition == "control") %>%          # keep only control group
+  group_by(bug) %>%
+  summarise(
+    num_correct = sum(correct, na.rm = TRUE),
+    total       = n(),
+    percent     = round(num_correct / total * 100, 1)
+  ) %>%
+  arrange(bug)
+
+bug_summary
+
+cognitive_load_ranking <- full_df %>%
+  filter(condition == "control") %>%
+  group_by(bug) %>%
+  summarise(avg_cognitive_load = round(mean(cognitive_load, na.rm = TRUE), 2)) %>%
+  arrange(desc(avg_cognitive_load))
+
+cognitive_load_ranking
+
+cognitive_load_ranking_full <- full_df %>%
+  group_by(bug) %>%
+  summarise(avg_cognitive_load = round(mean(cognitive_load, na.rm = TRUE), 2)) %>%
+  arrange(desc(avg_cognitive_load))
+
+cognitive_load_ranking_full
+
+bug_summary_full <- full_df %>%
+  group_by(bug) %>%
+  summarise(
+    num_correct = sum(correct, na.rm = TRUE),
+    total       = n(),
+    percent     = round(num_correct / total * 100, 1)
+  ) %>%
+  arrange(bug)
+
+bug_summary_full
 ```
 
 # RQ1a: Just run the models from APR, What is it Good For? (ICSE 2024)
@@ -285,6 +328,8 @@ full_df = merge(full_df,
 ```{r}
 # FIXME: not necessarily required to look at source code, should find a better thing to subset on
 gaze_valid_df = full_df[!is.na(full_df$Source.Code_fixation_count), ]
+# Drop P1t1 as well due to manual inspection (following best practices for ascertaining gaze data quality)
+gaze_valid_df = gaze_valid_df[!(gaze_valid_df$PID == 1 & gaze_valid_df$task_no == 1), ]
 gaze_valid_df = droplevels(gaze_valid_df)
 
 # boolean for whether they looked at the buggy method
@@ -316,9 +361,8 @@ full_df_had_patch = full_df[full_df$had_patch, ]
 full_df_had_patch = droplevels(full_df_had_patch)
 
 full_df_had_patch$accurate_about_patch_correctness = (full_df_had_patch$condition == "correct" & full_df_had_patch$think_patch_correct == 'YP') | 
-                                      (full_df_had_patch$correct == "overfitting" & full_df_had_patch$think_patch_correct == 'N')
+                                      (full_df_had_patch$condition == "overfitting" & full_df_had_patch$think_patch_correct == 'N')
 full_df_had_patch$accurate_about_patch_correctness = ifelse(is.na(full_df_had_patch$think_patch_correct), NA, full_df_had_patch$accurate_about_patch_correctness)
-full_df_had_patch
 
 gaze_valid_had_patch = full_df_had_patch[!is.na(full_df_had_patch$Source.Code_fixation_count), ]
 gaze_valid_had_patch = droplevels(gaze_valid_had_patch)
@@ -329,9 +373,6 @@ gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, re
 
 # RQ1a: How do patch suggestions affect time and accuracy of debugging sessions? (Section FIXME) 
 ```{r}
-# TODO: read in 2024 data and see if our participants are significantly more correct/faster (try and understand expertise to give evidence for why we might be seeing different results/no trend)
-# TODO: look at just data where they had a patch 
-
 # And now, as determined by the DAG, participant insights, and prior literature, we define the maximal model
 # FIXED EFFECTS:
 # key players: treatment condition, professional YOE. these are the ones we'll try nested models for in LRT.
@@ -349,7 +390,6 @@ gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, re
 # optimizer maybe helps the convergence some because it goes for more iterations
 
 # No clear difference between control and overfitting for correctness
-# Indicates perhaps our participants are 1) better at debugging or 2) these bugs are hard enough at baseline
 table(full_df$correct, full_df$condition)
 
 full_correctness_model = glmer(correct ~ condition + professional_YOE
@@ -391,6 +431,9 @@ data.frame(
 # LRT results: YOE does not improve the model
 # Summarize the best model to report
 summary(correctness_model_no_YOE)
+tidy(correctness_model_no_YOE, exponentiate = TRUE, conf.int = TRUE)
+table(full_df$condition, full_df$correct)
+emmeans(correctness_model_no_YOE, ~ condition, type = "response")
 
 # Overall results:
 # Correct patch suggestions predict solution correctness
@@ -402,7 +445,7 @@ summary(full_df$time_minutes)
 # Look at distribution shape
 hist(full_df$time_minutes, breaks = 30)
 
-full_timing_model = glmer(time_minutes ~ condition + professional_YOE
+full_timing_model = glmer(time_minutes ~ condition
                               + java_intellij_experience + self_efficacy + num_prev
                               + (1 | PID) + (1 | bug),
                               data = full_df,
@@ -436,12 +479,38 @@ legend("topright",
        lty = 1, lwd = 2)
 
 # Now, CPH model to see what predictors might be responsible for the differences
-cox_time_model = coxme(survivor ~ condition + professional_YOE
+cox_time_full = coxme(survivor ~ condition + professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
                               + (1 | PID) + (1 | bug),
                               data = full_df)
+cox_time_no_condition = coxme(survivor ~ professional_YOE
+                              + java_intellij_experience + self_efficacy + num_prev
+                              + (1 | PID) + (1 | bug),
+                              data = full_df)
+condition_LRT = anova(cox_time_full, cox_time_no_condition)
 
-summary(cox_time_model)
+cox_time_no_YOE = coxme(survivor ~ condition
+                              + java_intellij_experience + self_efficacy + num_prev
+                              + (1 | PID) + (1 | bug),
+                              data = full_df)
+YOE_LRT = anova(cox_time_full, cox_time_no_YOE)
+
+# BH-correct for multiple comparisons in LRTs and present results
+p_vals = c(
+  condition    = condition_LRT$`P(>|Chi|)`[2],
+  YOE          = YOE_LRT$`P(>|Chi|)`[2]
+)
+
+p_adjusted = p.adjust(p_vals, method = "BH")
+
+# print both together for easy comparison
+data.frame(
+  predictor = names(p_vals),
+  p_raw     = p_vals,
+  p_adj     = p_adjusted
+)
+
+summary(cox_time_no_YOE)
 
 # TODO: Are professionals more likely to edit the patch they were given? Are students more likely to overfit? (passes tests x is incorrect for a new column of “overfitting_fix”)
 ```
@@ -493,8 +562,19 @@ wilcox.test(professional_YOE ~ accurate_about_patch_correctness,
             data = full_df_had_patch)
 wilcox.test(professional_YOE ~ accurate_about_correctness, 
             data = full_df)
+# Wilcoxon rank-sum test
+
+tapply(professional_YOE, full_df_had_patch$accurate_about_patch_correctness, median)
 
 # Verdict: we do not have significant evidence to suggest this is the case.
+# However, trend for accurate about patch correctness
+# 127 total judgments, 80 for patch, 125 submit
+
+# I am curious about the alignment of their correctness/submission judgments - obv these are going to be highly correlated but I wonder how many "no I won't submit" there are for ones they think are correct. 
+table(full_df$think_correct, full_df$would_submit)
+
+# 20 were NQ or N...interesting
+
 ```
 
 # RQ4: How do patch suggestions influence cognitive load during debugging? (Section FIXME)
@@ -509,17 +589,6 @@ cognitive_load_model = lmer(cognitive_load ~ condition + professional_YOE
 
 summary(cognitive_load_model)
 
-# Redo significance testing
-k1 <- glht(cognitive_load_model, mcp(condition="Tukey"))$linfct
-k2 <- glht(cognitive_load_model, mcp(num_prev="Tukey"))$linfct
-posthoc <- glht(cognitive_load_model, linfct = rbind(k1,k2))
-summary(posthoc)
-model_parameters(cognitive_load_model)
-standardize_parameters(cognitive_load_model)
-
-r2(cognitive_load_model)
-Anova(cognitive_load_model)
-
 # Gaze metrics related to cognitive load: average fixation duration
 hist(gaze_valid_df$avg_fixation_duration)
 # looks mostly normal to me, can use regular lmer
@@ -529,12 +598,13 @@ summary(fix_duration_model)
 
 # Additionally, AFD is likely affected by when they looked at the patch first/how long they spent debugging unassisted
 # So we can do an analysis separately
+# condition not expected to matter here 
 fix_duration_patch_model = lmer(avg_fixation_duration ~ condition + ttff_patch + (1|PID) + (1|bug), 
                           data = gaze_valid_had_patch)
 summary(fix_duration_patch_model)
 ```
 
-# Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 1 (Section FIXME)
+# Testing hypotheses for RQ3: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 1 (Section FIXME)
 # Hypotheses derived from interview data
 ```{r}
 # Demonstrate why we can't include PID as a random effect for these analyses (only one sample per participant for some, so not estimable)
@@ -555,9 +625,9 @@ LRT1 = anova(m0, m1)
 LRT1
 # Not significant and ttff_patch does not improve the model above condition -- but overfitting patches predict incorrect fixes with correct patches as the comparison level
 
-# FIXME: include time-dependent covariate, convert df into long format to test its effects on response rate
-ttff_patch_cox = coxme(Surv(time_minutes, status) ~ condition + ttff_patch + (1 | bug), data = gaze_valid_had_patch)
-summary(ttff_patch_cox)
+# TODO: maybe include time-dependent covariate, convert df into long format to test its effects on response rate
+# ttff_patch_cox = coxme(Surv(time_minutes, status) ~ condition + ttff_patch + (1 | bug), data = gaze_valid_had_patch)
+# summary(ttff_patch_cox)
 
 # Hypothesis: Developers report triangulating multiple sources of information (tests, test output, code, patch, web-search) to debug, and prior work supports the idea that higher attention switching behavior correlates with effort and the accuracy of proof correction/problem-solving. Developers who exhibit higher attention switching behavior between AOIs may be more performant.
 attention_switch_model = glmer(correct ~ attention_switching_rate + (1|PID) + (1|bug),
@@ -567,10 +637,10 @@ summary(attention_switch_model)
 attention_switch_cox = coxme(Surv(time_minutes, status) ~ attention_switching_rate + (1|PID) + (1 | bug), data = gaze_valid_df)
 summary(attention_switch_cox)
 ```
-# Testing hypotheses for RQ2: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 2 (Section FIXME)
+# Testing hypotheses for RQ3: What debugging strategies and behaviors distinguish successful from unsuccessful debugging attempts? pt. 2 (Section FIXME)
 ```{r}
 table(gaze_valid_df$condition, gaze_valid_df$correct)
-# Large separation between correctness and condition
+# Large separation with correctness and condition. In other words, almost all of the variance in correctness is explained by condition (explain table)
 
 # Correctness: patch AOI (we are interested in interaction effect)
 # needed to remove random effect of bug because it was not estimable in interaction term and we want the models to be comparable
@@ -630,12 +700,10 @@ summary(survival_patch_dur)
 
 cor(gaze_valid_had_patch$prop_Patch_fixation_duration, gaze_valid_had_patch$time_minutes, use = "complete.obs")
 summary(aov(prop_Patch_fixation_duration ~ condition, data = gaze_valid_had_patch))
-# condition does correlate with proportion of fixation duration on patch -- investigate with fuller model in RQ3
-# not a mediator because condition (overfitting vs. correct) does not predict response time
-# TODO: determine how to report
+# condition does correlate with proportion of fixation duration on patch -- this makes this result much less interpretable/less trustworthy
 ```
 
-# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 1
+# RQ2: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 1
 ```{r}
 # Hypothesis: Overwhelmingly, developers report having access to a patch speeding up fault localization or making it possible for them. When developers have access to a patch, do they find the location of the bug faster?
 # ttff_fl_for_model should be 25 if NA since they "survived"/didn't find the bug
@@ -669,7 +737,7 @@ entropy_m = lmer(fixation_duration_entropy ~ condition + (1|PID) + (1|bug),
                  data = gaze_valid_df)
 ```
 
-# RQ3: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 2
+# RQ2: How do patch suggestions influence developers' debugging strategies and behaviors? (Section FIXME) pt. 2
 ```{r}
 # We would like to see if distribution of attention changed over AOIs we care about with the addition of a patch
 gaze_valid_long <- gaze_valid_df %>%
@@ -705,19 +773,47 @@ gaze_valid_long %>%
   labs(y = "Mean proportion of fixation duration", x = "Condition", fill = "AOI") +
   theme_minimal()
 
-m = art(prop_fixation ~ condition * AOI,
+m = art(prop_fixation ~ had_patch * AOI,
          data = gaze_valid_long)
 anova(m)
 
+m2 = art(prop_fixation ~ condition * AOI,
+         data = gaze_valid_long)
+anova(m2)
+
 # we observe no difference in fixation duration distribution over non-patch AOIs between conditions
 
-# What about the patch AOI? do people spend more time looking at the patch in either condition? 
-# we know they do from earlier
+# Do people spend more time looking at the patch in either condition?
 patch_dur_model = lmer(prop_Patch_fixation_duration ~ condition + (1|bug), data = gaze_valid_had_patch)
 summary(patch_dur_model)
 
 emm = emmeans(patch_dur_model, ~ condition)
 emm
+eff_size(emm, sigma = sigma(patch_dur_model), edf = df.residual(patch_dur_model))
+
+aggregate(prop_Patch_fixation_duration ~ condition, data = gaze_valid_had_patch, FUN = mean)
 # diff is 3.1% of fixation time, relative reduction of 40%
+
+hist(gaze_valid_had_patch$ttff_patch, breaks = 30)
+gaze_valid_had_patch$prop_ttff_patch_over_time = (gaze_valid_had_patch$ttff_patch / gaze_valid_had_patch$time_minutes) * 100
+hist(gaze_valid_had_patch$prop_ttff_patch_over_time, breaks = 15)
+
+h <- hist(gaze_valid_had_patch$prop_ttff_patch_over_time, breaks = seq(0, 100, by = 5), plot = FALSE)
+
+pdf("fixation_histogram.pdf", width = 7, height = 4)
+hist(gaze_valid_had_patch$prop_ttff_patch_over_time,
+     breaks = seq(0, 100, by = 5),
+     col = "goldenrod",
+     border ="black",
+     xlab = "Percentage of Task Time Elapsed Before First Fixation on Patch",
+     ylab = "Frequency",
+     ylim = c(0, max(h$counts) + 5),
+     main = "Timing of First Fixation on Patch",
+     xaxt = "n")
+axis(1, at = seq(0, 100, by = 20), labels = paste0(seq(0, 100, by = 20), "%"))
+dev.off()
+
+gaze_valid_had_patch$ttff_buggy_method_prop_time = (gaze_valid_had_patch$ttff_buggy_method / gaze_valid_had_patch$time_minutes) * 100
+summary(gaze_valid_had_patch$ttff_buggy_method_prop_time)
 ```
 
