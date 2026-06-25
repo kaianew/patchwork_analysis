@@ -1,0 +1,4 @@
+{
+  "comment": "The build scripts add lib/ to sys.path at runtime, so the shared patchwork_io module imports correctly when run. Pyright/Pylance does not execute that, so list lib/ here as an analysis search path to resolve `from patchwork_io import ...`.",
+  "extraPaths": ["lib"]
+}

@@ -7,10 +7,13 @@ aggregated_metrics/*.pkl
 !timing_correctness_data.csv
 !patchwork_screener.csv
 !patchwork_survey.csv
+# paper_results ships its build-input CSVs next to the scripts that consume them.
+!paper_results/**/*.csv
 .DS_Store
 .RData
 .Rhistory
 .venv
+.vscode/
 __pycache__/
 *.pyc
 *.pyo

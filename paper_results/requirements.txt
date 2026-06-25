@@ -1,0 +1,17 @@
+# Python dependencies for the paper_results analysis builds.
+#
+# Install:  python3 -m pip install -r requirements.txt
+#
+# Compatible-floor pins: these are minimum versions known to work. The analyses
+# were last run with pandas 3.0.0 and numpy 2.4.2 (Python 3.12.3); newer
+# versions are expected to work. If a number ever shifts, pin exactly to the
+# tested versions above to reproduce.
+pandas>=2.2
+numpy>=1.26
+
+# NOTE: the builds also import two LOCAL modules from
+# explorations/diagram-support/src/ (added to sys.path at runtime):
+#   gaze_clock_fix.recover_ms_clock   (timestamp clock recovery)
+#   parse_ide_events._is_project_java (project-path detection, IDE build)
+# These ship with the repo; no install needed, but the explorations/ tree must
+# be present alongside the analysis code.
