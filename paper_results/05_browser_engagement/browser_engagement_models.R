@@ -3,16 +3,12 @@
 #
 # SUGGESTIVE, not confirmed. The cleanest piece is the binary "any late browser"
 # question. The proper confirmatory model for the bounded late-third proportion
-# would be a beta / ordered-beta GLMM, but glmmTMB is broken in this environment
-# (TMB needs gfortran to rebuild, which is not installed) and brms/Stan are not
-# installed. So we report the lme4 binary hurdle part plus a permutation test, and
-# we show BOTH p-values so the method-dependence is explicit. The full lme4 hurdle,
-# whole-task and late-third continuous models, and backstops are in
-# logs/browser_engagement.log.
+# would be a beta / ordered-beta GLMM; we report the lme4 binary hurdle part plus a permutation test, and
+# we show BOTH p-values so the method-dependence is explicit. 
 #
 # The input CSV (browser_engagement_input.csv, in this directory) is produced
 # locally by build_browser_engagement.py from the per-task fixation files and the
-# timing CSV; it reads no exploration outputs.
+# timing CSV.
 #
 # Run from repo root:
 #   Rscript patchwork_analysis/paper_results/05_browser_engagement/browser_engagement_models.R

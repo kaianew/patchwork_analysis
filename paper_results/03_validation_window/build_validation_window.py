@@ -189,7 +189,7 @@ def buggy_method_share(
         return float(on_dur / total)
 
     whole = share(df)
-    window = share(df[df["timestamp"] >= t_last_edit])
+    window = share(df.loc[df["timestamp"] >= t_last_edit])
     return window, whole
 
 
