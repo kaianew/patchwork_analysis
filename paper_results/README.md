@@ -5,15 +5,12 @@ study data. Every finding follows the same shape: a Python **builder** turns the
 raw per-task data into one tidy input CSV, and an R **model** fits that CSV and
 writes a results JSON to `results/`.
 
-The results JSONs are the source of truth for every number. This README does not
-repeat them; to see a finding's estimates, read its `results/results_<finding>.json`
+To see a finding's estimates, read its `results/results_<finding>.json`
 (or rerun its model). Each JSON records the contrast estimates, p-values, BH-
 adjusted p-values, the random-effect structure actually used, and the per-cell
 counts.
 
 ## Setup (running on another machine)
-
-Nothing is hardcoded to one laptop.
 
 1. **Paths.** Two environment variables, each with a default:
    - `PATCHWORK_ROOT` — repo root. Defaults to the nearest ancestor directory
@@ -36,10 +33,10 @@ make <finding>    # just one: search, editing, validation, debugger, browser
 make clean        # remove generated results JSONs and input CSVs
 ```
 
-A builder reads only the raw data under `$PATCHWORK_DATA` plus the task list from
+A builder reads the raw data under `$PATCHWORK_DATA` plus the task list from
 `patchwork_analysis/timing_correctness_data.csv`. It writes its input CSV next to
-the model that consumes it. Nothing depends on the `explorations/` tree. The
-committed input CSVs let the models run without rebuilding; rebuild on demand by
+the model that consumes it. The committed input CSVs let the models run without
+rebuilding; rebuild on demand by 
 running a builder (each prints a "you probably don't need to run this" note,
 because its CSV is already committed).
 
