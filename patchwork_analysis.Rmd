@@ -81,6 +81,8 @@ full_df$accurate_about_correctness = (full_df$correct == TRUE & full_df$think_co
 
 # Make status column for survival analysis
 full_df$status = ifelse(full_df$time_minutes < 25, TRUE, FALSE)
+# P2 was additionally censored (cut off at 20 min)
+full_df$status[full_df$PID == 'P2' & full_df$task_no == 3] = FALSE
 ```
 
 # Prep data from survey to put in analysis dataframe
@@ -381,6 +383,7 @@ gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, re
 # intellij/java experience
 # self-efficacy scores
 # number of previous tasks, looking for ordering effects 
+# additionally check whether they were cut off too early (just P2 t3) to see if that meaningfully contributes to the model
 
 # Note: my intuition is that professional YOE/professional identity are too related as constructs for what we're trying to measure (latent expertise) to include both
 # in the same model
@@ -389,18 +392,28 @@ gaze_valid_had_patch[, relevant_patch_aoi_prop_cols] = gaze_valid_had_patch[, re
 
 # RANDOM EFFECTS:
 # bug, PID
-# optimizer maybe helps the convergence some because it goes for more iterations
 
 # No clear difference between control and overfitting for correctness
 table(full_df$correct, full_df$condition)
+
+# First determine if cutting someone off early was significant for correctness (survival analysis handles this automatically, but need to check fro correctness)
+
+full_correctness_model_w_cutoff = glmer(correct ~ condition + professional_YOE
+                              + java_intellij_experience + self_efficacy + num_prev + cut_off
+                              + (1 | PID) + (1 | bug),
+                              data = full_df,
+                              family = binomial)
 
 full_correctness_model = glmer(correct ~ condition + professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
                               + (1 | PID) + (1 | bug),
                               data = full_df,
                               family = binomial)
+cutoff_LRT = anova(full_correctness_model_w_cutoff, full_correctness_model)
+cutoff_LRT
+# answer: no. now we test meaningful predictors
 
-# Do LRT to see whether condition, professional_YOE, and professional_YOE:condition improve the model
+# Do LRT to see whether condition or professional_YOE improve the model
 correctness_model_no_condition = glmer(correct ~ professional_YOE
                               + java_intellij_experience + self_efficacy + num_prev
                               + (1 | PID) + (1 | bug),
@@ -528,9 +541,16 @@ correct_tab = table(full_df$correct, full_df$think_correct)
 patch_correct_tab = table(full_df_had_patch$condition, full_df_had_patch$think_patch_correct)
 submit_correct_tab = table(full_df$would_submit, full_df$correct)
 
-as.data.frame.matrix(correct_tab)
-as.data.frame.matrix(patch_correct_tab)
-as.data.frame.matrix(submit_correct_tab)
+correct_matrix = as.data.frame.matrix(correct_tab)
+patch_correct_matrix = as.data.frame.matrix(patch_correct_tab)
+submit_correct_matrix = as.data.frame.matrix(submit_correct_tab)
+
+correct_matrix
+sum(correct_matrix)
+patch_correct_matrix
+sum(patch_correct_matrix)
+submit_correct_matrix
+sum(submit_correct_matrix)
 
 # set seed so results are deterministic
 set.seed(20260622)
@@ -582,6 +602,13 @@ aggregate(professional_YOE ~ accurate_about_patch_correctness, data = full_df_ha
 table(full_df$think_correct, full_df$would_submit)
 
 # 20 were NQ or N...interesting
+
+# Select two columns and save to CSV
+new_df <- gaze_valid_df[, c("PID", "task_no")]
+
+write.csv(new_df, "valid_ptasks.csv", row.names = FALSE)
+
+P19t2 = gaze_valid_df[gaze_valid_df$PID == "P19" & gaze_valid_df$task_no == 2, ]
 
 ```
 

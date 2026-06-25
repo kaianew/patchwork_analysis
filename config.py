@@ -11,8 +11,7 @@ OUTLIERS = ["/home/kaia/patchwork_data/P10/t2",
             "/home/kaia/patchwork_data/P32/t2",
             "/home/kaia/patchwork_data/P1/t2",
             "/home/kaia/patchwork_data/P1/t3",
-            "/home/kaia/patchwork_data/P1/t1",
-            "/home/kaia/patchwork_data/P19/t2"]
+            "/home/kaia/patchwork_data/P1/t1"]
 
 # project_path = '/Users/klnewman/Desktop/P15'
 project_paths = ['/home/kaia/patchwork_data']
