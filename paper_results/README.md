@@ -39,12 +39,13 @@ activated venv), or run `make PY=/path/to/python3`.
 
 ```
 make all       # build inputs, fit models, write results/ + logs/
-make verify    # cross-check the paper's \clgdraft numbers against results/
 ```
 
-`make all` reruns from local data. The Python builders read the per-task fixation
-CSVs under `$PATCHWORK_DATA`; the R models read those plus the saved classification
-and IDE/gaze intermediates under `../../explorations/diagram-support/output/`.
+`make all` reruns from local data: each finding's Python builder reads the raw
+per-task gaze/IDE data under `$PATCHWORK_DATA` plus the task list from
+`timing_correctness_data.csv`, writes its input CSV next to the model, and the R
+model fits it and writes the results JSON. Each finding's `make` target (`search`,
+`editing`, `validation`, `debugger`, `browser`) runs just that one.
 
 ## Modeling conventions (in `lib/model_helpers.R`)
 

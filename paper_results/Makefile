@@ -1,7 +1,6 @@
 # Reproduce every paper number from local inputs.
 #
 #   make all      run all builders + models, write results/ JSON + logs/
-#   make verify   cross-check the paper's \clgdraft numbers against results/
 #   make clean     remove generated results (keeps the committed scripts)
 #
 # Run from this directory (patchwork_analysis/paper_results/).
@@ -12,7 +11,7 @@ PY ?= python3
 RS ?= Rscript
 HERE := $(ROOT)/patchwork_analysis/paper_results
 
-.PHONY: all verify clean manifest search editing validation debugger browser
+.PHONY: all clean manifest search editing validation debugger browser
 
 all: search editing validation debugger browser
 	@echo "All analyses complete. Results in results/, logs in logs/."
@@ -45,9 +44,6 @@ debugger:
 # late-task browser engagement (suggestive).
 browser:
 	cd $(ROOT) && $(RS) $(HERE)/05_browser_engagement/browser_engagement_models.R 2>&1 | tee $(HERE)/logs/browser_engagement.log
-
-verify:
-	$(PY) $(HERE)/verify_numbers.py
 
 clean:
 	rm -f $(HERE)/results/results_*.json

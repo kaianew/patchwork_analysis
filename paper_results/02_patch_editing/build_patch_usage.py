@@ -10,10 +10,7 @@ consumes it.
 
 The category comes from two things about each task.
 
-End-state, from the final diff vs the canonical patch. Each participant's final
-submitted diff is compared against the canonical suggested patch (the Eladawy
-ICSE'24 replication-package patches, embedded verbatim in ``CANONICAL_PATCHES``
-below), giving MATCHES-SUGGESTION, EDIT-AT-SITE, EDIT-ELSEWHERE, or NOTHING.
+End-state, from the final diff vs the canonical patch. giving MATCHES-SUGGESTION, EDIT-AT-SITE, EDIT-ELSEWHERE, or NOTHING.
 
 Mechanism, from the IDE event stream. The IDE tracking log gives four
 non-exclusive flags for how the patch text entered the code: ``applied_dialog``
@@ -25,7 +22,7 @@ The end-state and ``patch_entered`` map to the final ``patch_usage`` category.
 Two hand-reviewed cells override the rule (P5 t2, P7 t2); both are encoded
 explicitly with their reasons below.
 
-The script reads only:
+The script reads:
 - participant final diffs ``patchwork_data/<disk_pid>/<bug>_diff.txt``
 - IDE logs ``patchwork_data/<disk_pid>/t<task>[ _part1/_part2]/ide_tracking.xml``
 - the task list and anchors from ``patchwork_analysis/timing_correctness_data.csv``
@@ -506,7 +503,7 @@ def at_canonical_site(edit: FileEdit, can: CanonicalPatch) -> bool:
     """Same target file (basename) and overlapping hunk range (with slack)."""
     if edit.basename != can.target_file:
         return False
-    if can.hunk_start is None:
+    if can.hunk_start is None or can.hunk_end is None:
         return True
     slack = 25
     for (s, e) in edit.hunk_lines:
