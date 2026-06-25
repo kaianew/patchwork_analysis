@@ -408,6 +408,8 @@ correctness_model_no_condition = glmer(correct ~ professional_YOE
                               family = binomial)
 condition_LRT = anova(full_correctness_model, correctness_model_no_condition)
 
+condition_LRT
+
 correctness_model_no_YOE = glmer(correct ~ condition
                               + java_intellij_experience + self_efficacy + num_prev
                               + (1 | PID) + (1 | bug),
