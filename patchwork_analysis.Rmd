@@ -364,6 +364,9 @@ full_df_had_patch = full_df[full_df$had_patch, ]
 # relevel bc no control
 full_df_had_patch = droplevels(full_df_had_patch)
 
+# Prep fix_site_same col to see if they used the given patch unchanged
+full_df_had_patch$fix_site_same = ifelse(full_df_had_patch$fix_site_same == 'N', FALSE, ifelse(full_df_had_patch$fix_site_same == 'Y', TRUE, NA))
+
 full_df_had_patch$accurate_about_patch_correctness = (full_df_had_patch$condition == "correct" & full_df_had_patch$think_patch_correct == 'YP') | 
                                       (full_df_had_patch$condition == "overfitting" & full_df_had_patch$think_patch_correct == 'N')
 full_df_had_patch$accurate_about_patch_correctness = ifelse(is.na(full_df_had_patch$think_patch_correct), NA, full_df_had_patch$accurate_about_patch_correctness)
@@ -609,7 +612,23 @@ new_df <- gaze_valid_df[, c("PID", "task_no")]
 write.csv(new_df, "valid_ptasks.csv", row.names = FALSE)
 
 P19t2 = gaze_valid_df[gaze_valid_df$PID == "P19" & gaze_valid_df$task_no == 2, ]
+P19t2
 
+```
+
+# RQ1 - Signals of Developer Judgments
+```{r}
+# Goal: replicate [coauthor's] results with < 1000 LOC
+# find participants from full_df who evaluated the patch
+# fix_site_same - syntactically same at fix site (did not change the patch)
+# evaluated_patch - Y for looked at patch, N for did not
+
+# in 4 participant-tasks, they did not evaluate the patch 
+full_df_had_patch
+applied_unchanged_model = glmer(fix_site_same ~ condition + (1 | PID) + (1 | bug),
+                              data = full_df_had_patch,
+                              family = binomial)
+summary(applied_unchanged_model)
 ```
 
 # RQ4: How do patch suggestions influence cognitive load during debugging? (Section FIXME)
