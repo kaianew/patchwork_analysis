@@ -10,9 +10,8 @@ from matplotlib.patches import Patch
 
 BASE_DIR = Path(__file__).resolve().parent
 INPUT_CSV = BASE_DIR / "scarf_plot_input.csv"
-OUTPUT_PDF = BASE_DIR / "five_participants_by_condition_scarf.pdf"
-
-N_PARTICIPANTS = 5
+OUTPUT_DIR = BASE_DIR
+PARTICIPANTS_PER_PDF = 5
 XMAX_MIN = 25.0
 
 REQUIRED_CONDITIONS = ["control", "overfitting", "correct"]
@@ -58,9 +57,12 @@ def load_scarf_data(csv_path: Path) -> pd.DataFrame:
     return df
 
 
-def pick_participants(df: pd.DataFrame, n: int) -> list[str]:
+def pick_all_participants(df: pd.DataFrame) -> list[str]:
+    # Exclude P1_t1
+    df_filtered = df[~((df["PID"] == "P1") & (df["task_no"] == 1))].copy()
+    
     trial_map = (
-        df[["PID", "condition"]]
+        df_filtered[["PID", "condition"]]
         .drop_duplicates()
         .groupby("PID")["condition"]
         .apply(set)
@@ -69,8 +71,7 @@ def pick_participants(df: pd.DataFrame, n: int) -> list[str]:
     selected = [
         pid for pid, conds in trial_map.items() if set(REQUIRED_CONDITIONS).issubset(conds)
     ]
-    selected = sorted(selected)
-    return selected[:n]
+    return sorted(selected)
 
 
 def compute_draw_window(start_min: float, end_min: float, xmax: float):
@@ -128,10 +129,10 @@ def draw_empty_panel(ax: plt.Axes, title: str) -> None:
 
 def add_shared_legend(fig: plt.Figure) -> None:
     handles = [Patch(facecolor=AOI_COLORS[a], label=a) for a in AOI_ORDER]
-    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False, bbox_to_anchor=(0.5, 0.02))
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, bbox_to_anchor=(0.5, 0.01))
 
 
-def make_pdf(df: pd.DataFrame, participants: list[str], output_pdf: Path) -> None:
+def make_pdf_for_group(df: pd.DataFrame, participants: list[str], pdf_num: int, output_dir: Path) -> None:
     rows: list[tuple[str, str, pd.DataFrame]] = []
     for pid in participants:
         person_df = df[df["PID"] == pid].copy()
@@ -154,18 +155,22 @@ def make_pdf(df: pd.DataFrame, participants: list[str], output_pdf: Path) -> Non
         if i > 0 and rows[i - 1][0] != pid:
             ax.axhline(y=ax.get_ylim()[1], color="#d9d9d9", linewidth=1)
 
+    participant_label = ", ".join(participants)
     fig.suptitle(
-        "Five Participants: Correct, Overfitting, and Control Scarf Plots",
+        f"Participants {participant_label}: Correct, Overfitting, and Control Scarf Plots",
         fontsize=14,
         fontweight="bold",
         y=0.995,
     )
     add_shared_legend(fig)
-    fig.tight_layout(rect=[0.03, 0.06, 0.99, 0.985])
+    fig.tight_layout(rect=[0.03, 0.08, 0.99, 0.985])
 
+    output_pdf = output_dir / f"scarf_plot_group{pdf_num:02d}_participants_{'-'.join(participants)}.pdf"
     with PdfPages(output_pdf) as pdf:
         pdf.savefig(fig)
     plt.close(fig)
+    
+    print(f"Wrote {output_pdf.name}")
 
 
 def main() -> None:
@@ -173,16 +178,22 @@ def main() -> None:
         raise FileNotFoundError(f"Missing input file: {INPUT_CSV}")
 
     df = load_scarf_data(INPUT_CSV)
-    participants = pick_participants(df, N_PARTICIPANTS)
+    participants = pick_all_participants(df)
 
-    if len(participants) < N_PARTICIPANTS:
-        raise ValueError(
-            f"Found only {len(participants)} participants with all required conditions; "
-            f"need {N_PARTICIPANTS}."
-        )
+    if not participants:
+        raise ValueError("No participants found with all required conditions.")
 
-    make_pdf(df, participants, OUTPUT_PDF)
-    print(f"Wrote {OUTPUT_PDF.name} for participants: {', '.join(participants)}")
+    print(f"Found {len(participants)} eligible participants: {participants}")
+
+    # Group participants into chunks
+    num_groups = (len(participants) + PARTICIPANTS_PER_PDF - 1) // PARTICIPANTS_PER_PDF
+    for group_idx in range(num_groups):
+        start_idx = group_idx * PARTICIPANTS_PER_PDF
+        end_idx = min(start_idx + PARTICIPANTS_PER_PDF, len(participants))
+        group = participants[start_idx:end_idx]
+        make_pdf_for_group(df, group, group_idx + 1, OUTPUT_DIR)
+
+    print(f"Generated {num_groups} PDF(s)")
 
 
 if __name__ == "__main__":

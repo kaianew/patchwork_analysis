@@ -29,7 +29,7 @@ AOI_COLORS = {
     "Tests": "#fd8d3c",
     "Source Code": "#756bb1",
     "Missing": "#bdbdbd",
-    "Other": "#8f8f8f",
+    "Other": "#d9b58f",
 }
 
 # -----------------------------
