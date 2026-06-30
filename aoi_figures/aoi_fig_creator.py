@@ -12,7 +12,7 @@ OUTPUT_DIR = BASE_DIR / "paper_frames"
 AOI_COLORS_HEX = {
 	"Patch": "#d7301f",
 	"Browser": "#3182bd",
-	"Test and Runtime Feedback": "#31a354",
+	"Test and Runtime Feedback": "#6a51a3",
 	"Tests": "#fd8d3c",
 	"Source Code": "#756bb1",
 	"Other": "#bdbdbd",
@@ -21,8 +21,10 @@ AOI_COLORS_HEX = {
 # Label aliases so figure text can stay natural while colors remain consistent.
 LABEL_TO_AOI = {
 	"Patch": "Patch",
+	"Patch/Source Code/Tests (Patch Pictured)": "Patch",
 	"Browser": "Browser",
 	"Tests": "Tests",
+	"Tests/Patch/Source Code (Tests Pictured)": "Tests",
 	"Test and Runtime Feedback": "Test and Runtime Feedback",
 }
 
@@ -43,7 +45,8 @@ FRAME_SPECS = [
 		"label": "Patch",
 		"boxes": [
 			# Starter box; adjust after review.
-			(0.24, 0.061, 0.735, 0.563, "Patch"),
+			(0.24, 0.061, 0.735, 0.563, "Patch/Source Code/Tests (Patch Pictured)"),
+			(0.02, 0.628, 0.954, 0.3, "Test and Runtime Feedback", "top_right"),
 		],
 	},
 	{
@@ -61,7 +64,7 @@ FRAME_SPECS = [
 		"label": "Tests + Test and Runtime Feedback",
 		"boxes": [
 			# Starter boxes; adjust after review.
-			(0.24, 0.061, 0.735, 0.563, "Tests"),
+			(0.24, 0.061, 0.735, 0.563, "Tests/Patch/Source Code (Tests Pictured)"),
 			(0.02, 0.628, 0.954, 0.3, "Test and Runtime Feedback", "top_right"),
 		],
 	},

@@ -366,6 +366,7 @@ full_df_had_patch = droplevels(full_df_had_patch)
 
 # Prep fix_site_same col to see if they used the given patch unchanged
 full_df_had_patch$fix_site_same = ifelse(full_df_had_patch$fix_site_same == 'N', FALSE, ifelse(full_df_had_patch$fix_site_same == 'Y', TRUE, NA))
+full_df_had_patch$changed_patch = !full_df_had_patch$fix_site_same
 
 full_df_had_patch$accurate_about_patch_correctness = (full_df_had_patch$condition == "correct" & full_df_had_patch$think_patch_correct == 'YP') | 
                                       (full_df_had_patch$condition == "overfitting" & full_df_had_patch$think_patch_correct == 'N')
@@ -618,17 +619,26 @@ P19t2
 
 # RQ1 - Signals of Developer Judgments
 ```{r}
-# Goal: replicate [coauthor's] results with < 1000 LOC
+# Question: Did people use the patch they were given more often in either condition?
 # find participants from full_df who evaluated the patch
 # fix_site_same - syntactically same at fix site (did not change the patch)
-# evaluated_patch - Y for looked at patch, N for did not
+
+applied_unchanged_df = full_df_had_patch
+# Note: P6 also mentioned that they didn't look at the patch in their t1
+applied_unchanged_df = applied_unchanged_df[!(applied_unchanged_df$PID == "P6" & applied_unchanged_df$task_no == 1), ]
+# make OR make more sense by inverting condition we compare to for this particular model
+# applied_unchanged_df$condition = relevel(factor(applied_unchanged_df$condition), ref = "overfitting")
 
 # in 4 participant-tasks, they did not evaluate the patch 
-full_df_had_patch
-applied_unchanged_model = glmer(fix_site_same ~ condition + (1 | PID) + (1 | bug),
-                              data = full_df_had_patch,
+applied_unchanged_model = glmer(changed_patch ~ condition + (1 | PID) + (1 | bug),
+                              data = applied_unchanged_df,
                               family = binomial)
 summary(applied_unchanged_model)
+
+# find odds ratio:
+exp(fixef(applied_unchanged_model))
+
+table(applied_unchanged_df$condition, applied_unchanged_df$changed_patch)
 ```
 
 # RQ4: How do patch suggestions influence cognitive load during debugging? (Section FIXME)
@@ -845,6 +855,8 @@ anova(m2)
 # Do people spend more time looking at the patch in either condition?
 patch_dur_model = lmer(prop_Patch_fixation_duration ~ condition + (1|bug), data = gaze_valid_had_patch)
 summary(patch_dur_model)
+# find odds ratio, i think it's not very interpretable in this case, but we check
+exp(fixef(patch_dur_model))
 
 emm = emmeans(patch_dur_model, ~ condition)
 emm

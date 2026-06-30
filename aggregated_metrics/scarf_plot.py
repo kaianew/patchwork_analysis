@@ -28,8 +28,8 @@ AOI_COLORS = {
     "Test and Runtime Feedback": "#31a354",
     "Tests": "#fd8d3c",
     "Source Code": "#756bb1",
-    "Missing": "#bdbdbd",
-    "Other": "#d9b58f",
+    "Missing": "#ffffff",
+    "Other": "#d9d9d9",
 }
 
 # -----------------------------
